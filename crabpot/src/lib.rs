@@ -53,15 +53,15 @@ fn colating() {
 
 fn vectors() {
     let mut v: Vec<i32> = Vec::new();
-    let mut vMacro = vec![1, 2, 3, 4, 5];
+    let mut v_macro = vec![1, 2, 3, 4, 5];
 
     // add data!
     v.push(4);
 
-    let third = &vMacro[2];
+    let third = &v_macro[2];
     println!("Third element: {}", third);
 
-    match vMacro.get(2) {
+    match v_macro.get(2) {
         Some(third) => println!("there is a third element: {}", third),
         None => println!("no third element"),
     }
@@ -98,4 +98,32 @@ fn string_appending() {
 
         let s = format!("{}-{}-{}", s1, s2, s3);
     }
+}
+
+use std::collections::HashMap;
+
+pub fn get_hashty(){
+    let mut scores = HashMap::new();
+
+    scores.insert(String::from("Blue"), 10);
+
+    scores.entry(String::from("Yellow")).or_insert(50);
+    scores.entry(String::from("Blue")).or_insert(50);
+
+    for (key, value) in &scores {
+        println!("{}: {}", key,value);
+    }
+
+    println!("{:?}", scores);
+}
+
+pub fn hash_updates(){
+    let text = "hello world wonderful world";
+    let mut map = HashMap::new();
+
+    for word in text.split_whitespace() {
+        let count = map.entry(word).or_insert(0);
+        *count += 1;
+    }
+    println!("{:?}", map);
 }
