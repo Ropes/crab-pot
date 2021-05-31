@@ -1,4 +1,4 @@
-use ch10::{self, Summary};
+use ch10::*;
 
 fn main() {
     let tweet = ch10::Tweet {
@@ -13,6 +13,12 @@ fn main() {
     let string2 = String::from("xyz");
     let result = ch10::longest(string1.as_str(), string2.as_str());
     println!("The longest string is '{}'", result);
+
+    let novel = String::from("Call me Ishmael. Some years ago...");
+    let first_sentence = novel.split('.').next().expect("could not find '.'"); 
+    let i = ch10::ImportantExerpt{ part: first_sentence };
+    println!("{:?}", i);    
+
 }
 
 fn main2() {
