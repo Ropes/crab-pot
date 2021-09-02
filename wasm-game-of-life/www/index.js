@@ -4,7 +4,8 @@ import { memory } from "wasm-game-of-life/wasm_game_of_life_bg";
 const CELL_SIZE = 5; // px
 const GRID_COLOR = "#CCCCCC";
 const DEAD_COLOR = "#FFFFFF";
-const ALIVE_COLOR = "#000000";
+//const ALIVE_COLOR = "#000000";
+const ALIVE_COLOR = "#338dff";
 const pre = document.getElementById("game-of-life-canvas");
 const universe = Universe.new();
 const width = universe.width();
@@ -67,16 +68,59 @@ const drawCells = () => {
   ctx.stroke();
 };
 
+canvas.addEventListener("click", event => {
+  const boundingRect = canvas.getBoundingClientRect();
+
+  const scaleX = canvas.width / boundingRect.width;
+  const scaleY = canvas.height / boundingRect.height;
+
+  const canvasLeft = (event.clientX - boundingRect.left) * scaleX;
+  const canvasTop = (event.clientY - boundingRect.top) * scaleY;
+
+  const row = Math.min(Math.floor(canvasTop / (CELL_SIZE + 1)), height - 1);
+  const col = Math.min(Math.floor(canvasLeft / (CELL_SIZE + 1)), width - 1);
+
+  universe.toggle_cell(row, col);
+
+  drawGrid();
+  drawCells();
+});
+
+const playPauseButton = document.getElementById("play-pause");
+let animationLoopID = null;
+
+const isPaused = () => {
+  return animationLoopID === null;
+}
+
+const play = () => {
+  playPauseButton.textContent = "⏸";
+  renderLoop();
+};
+
+const pause = () => {
+  playPauseButton.textContent = "▶";
+  cancelAnimationFrame(animationId);
+  animationId = null;
+};
+
+playPauseButton.addEventListener("click", event => {
+  if (isPaused()) {
+    play();
+  } else {
+    pause();
+  }
+});
+
 const renderLoop = () => {
   universe.tick();
 
   drawGrid();
   drawCells();
 
-  requestAnimationFrame(renderLoop);
+  animationId = requestAnimationFrame(renderLoop);
 };
 
   drawGrid();
   drawCells();
-
-  requestAnimationFrame(renderLoop);
+  play();
