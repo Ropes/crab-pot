@@ -9,6 +9,17 @@ use std::{collections::btree_set::Union, fmt};
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
+/*
+extern crate web_sys;
+fn now() -> f64 {
+    web_sys::window()
+        .expect("should have a Window")
+        .performance()
+        .expect("should have a Performance")
+        .now()
+}
+*/
+
 #[wasm_bindgen]
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -82,6 +93,14 @@ impl Universe {
     pub fn set_height(&mut self, height: u32){
         self.height = height;
         self.cells = (0..height * self.width).map(|_i|Cell::Dead).collect();
+    }
+
+    pub fn launch_glider(&mut self, x: u32, y: u32){
+       self.toggle_cell(x, y);
+       self.toggle_cell(x+1, y);
+       self.toggle_cell(x+2, y); 
+       self.toggle_cell(x, y+1);
+       self.toggle_cell(x+1, y+2); 
     }
 
     pub fn cells(&self) -> *const Cell {
