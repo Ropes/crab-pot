@@ -1,9 +1,7 @@
 use chrono::prelude::*;
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use simple_error::bail;
 use std::error::Error;
-use std::time::SystemTime;
-use wasm_bindgen::prelude::*;
 
 #[derive(PartialEq, Debug)]
 pub enum Tide {
@@ -11,7 +9,7 @@ pub enum Tide {
     Low,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(Debug, PartialEq)]
 pub struct TidePoint {
     dt: DateTime<Utc>,
     level: f32,
@@ -26,32 +24,26 @@ impl TidePoint {
             tide: tide,
         }
     }
+
+    pub fn to_string(&self) -> String {
+        return format!("{:?}::{}:{}", self.tide, self.dt, self.level);
+    }
 }
 
 // Query: https://tidesandcurrents.noaa.gov/cgi-bin/stationtideinfo.cgi?Stationid=9446583
 // Example data: "3:35 AM|0.6|low 10:23 AM|12.3|high 4:06 PM|6.9|low 9:11 PM|11.7|high 9:11 PM|high";
-fn parse_noaa_tides(s: &str) -> Result<Vec<TidePoint>, Box<dyn Error>> {
-    let split_strings: Vec<&str> = s.split_whitespace().collect();
-    let mut ts_prefix: &str = "";
-    let mut tide_strings: Vec<&str> = Vec::new();
-    let mut prefixes: Vec<usize> = Vec::new();
+/*
+3:08 AM|0.5|low
+10:21 AM|15.1|high
+4:57 PM|6.4|low
+9:18 PM|9.9|high
+9:18 PM|high*/
+pub fn parse_noaa_tides(s: &str) -> Result<Vec<TidePoint>, Box<dyn Error>> {
+    let split_strings: Vec<&str> = s.lines().collect();
 
-    for i in 0..split_strings.len(){
-        let part = split_strings[i];
-        if part.len() < 5 {
-            // Dangling prefix found, save it to tmp and iterate
-            ts_prefix = part;
-        }else if ts_prefix != "" {
-            prefixes.push(i);
-            ts_prefix = "";
-            //let new_part = format!("{} {}", ts_prefix, part).as_str();
-            //tide_strings.push(new_part)
-        }else{
-            tide_strings.push(part);
-        }
-    }
+    split_strings.iter().map(|p| println!("{}", p)).count();
 
-    let tide_parts: Vec<TidePoint> = tide_strings
+    let tide_parts: Vec<TidePoint> = split_strings
         .iter()
         .filter_map(|part| parse_tide_tuple(part).ok())
         .collect();
@@ -60,7 +52,7 @@ fn parse_noaa_tides(s: &str) -> Result<Vec<TidePoint>, Box<dyn Error>> {
 }
 
 fn parse_tide_tuple(s: &str) -> Result<TidePoint, Box<dyn Error>> {
-    let parts: Vec<&str> = s.split('|').collect();
+    let parts: Vec<&str> = s.trim().split('|').collect();
     return match parts.len() {
         3 => {
             let dt = Utc::now();
@@ -110,9 +102,15 @@ mod tests {
     use chrono::prelude::*;
     use chrono::{DateTime, TimeZone, Utc};
 
-    const tide_data: &str =
-        "3:35 AM|0.6|low 10:23 AM|12.3|high 4:06 PM|6.9|low 9:11 PM|11.7|high 9:11 PM|high";
+    //const tide_data: &str ="3:35 AM|0.6|low 10:23 AM|12.3|high 4:06 PM|6.9|low 9:11 PM|11.7|high 9:11 PM|high";
+    const tide_data: &str = r#"3:08 AM|0.5|low 
+10:21 AM|15.1|high 
+4:57 PM|6.4|low 
+9:18 PM|9.9|high 
+9:18 PM|high"#;
     const single_data: &str = "3:35 AM|0.6|low";
+    const tide_single: &str = "10:21 AM|15.1|high ";
+
     // full ts
     const ts_data: &str = "3:35 AM";
     const ts_pm_data: &str = "9:11 PM";
@@ -140,9 +138,23 @@ mod tests {
     }
 
     #[test]
+    fn test_single_tide_ok() {
+        let ret = parse_tide_tuple(tide_single);
+        assert!(ret.is_ok());
+        let val = ret.unwrap();
+        assert_eq!(val.level, 15.1);
+        assert_eq!(val.tide, Tide::High);
+    }
+
+
+    #[test]
     fn test_full_parse() {
         let res = parse_noaa_tides(tide_data);
         assert!(res.is_ok());
+
+        let tides = res.unwrap();
+        println!("{:?}", tides);
+        //assert_eq!(t.level, 15.1);
     }
 }
 

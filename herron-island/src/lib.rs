@@ -1,7 +1,6 @@
 mod utils;
 
 use wasm_bindgen::prelude::*;
-use std::{collections::btree_set::Union, fmt};
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
 // allocator.
@@ -18,5 +17,6 @@ extern {
 
 #[wasm_bindgen]
 pub fn greet(s: &str) {
-    alert(s);
+    let res = parse_noaa_tides(tide_data).unwrap();
+    alert();
 }
