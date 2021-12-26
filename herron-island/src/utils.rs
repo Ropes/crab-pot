@@ -1,11 +1,12 @@
 use chrono::prelude::*;
 use chrono::{DateTime, TimeZone, Utc};
-use std::time::SystemTime;
-use std::error::Error;
 use simple_error::bail;
+use std::error::Error;
+use std::time::SystemTime;
+use wasm_bindgen::prelude::*;
 
 #[derive(PartialEq, Debug)]
-pub enum Tide{
+pub enum Tide {
     High,
     Low,
 }
@@ -17,9 +18,9 @@ pub struct TidePoint {
     tide: Tide,
 }
 
-impl TidePoint{
-    pub fn new(dt: DateTime<Utc>, level: f32, tide: Tide) -> TidePoint{
-        TidePoint{
+impl TidePoint {
+    pub fn new(dt: DateTime<Utc>, level: f32, tide: Tide) -> TidePoint {
+        TidePoint {
             dt: dt,
             level: level,
             tide: tide,
@@ -27,23 +28,53 @@ impl TidePoint{
     }
 }
 
-fn parse_tide_tuple(s: &str) -> Result<TidePoint, Box<Error>> {
+// Query: https://tidesandcurrents.noaa.gov/cgi-bin/stationtideinfo.cgi?Stationid=9446583
+// Example data: "3:35 AM|0.6|low 10:23 AM|12.3|high 4:06 PM|6.9|low 9:11 PM|11.7|high 9:11 PM|high";
+fn parse_noaa_tides(s: &str) -> Result<Vec<TidePoint>, Box<dyn Error>> {
+    let split_strings: Vec<&str> = s.split_whitespace().collect();
+    let mut ts_prefix: &str = "";
+    let mut tide_strings: Vec<&str> = Vec::new();
+    let mut prefixes: Vec<usize> = Vec::new();
+
+    for i in 0..split_strings.len(){
+        let part = split_strings[i];
+        if part.len() < 5 {
+            // Dangling prefix found, save it to tmp and iterate
+            ts_prefix = part;
+        }else if ts_prefix != "" {
+            prefixes.push(i);
+            ts_prefix = "";
+            //let new_part = format!("{} {}", ts_prefix, part).as_str();
+            //tide_strings.push(new_part)
+        }else{
+            tide_strings.push(part);
+        }
+    }
+
+    let tide_parts: Vec<TidePoint> = tide_strings
+        .iter()
+        .filter_map(|part| parse_tide_tuple(part).ok())
+        .collect();
+
+    Ok(tide_parts)
+}
+
+fn parse_tide_tuple(s: &str) -> Result<TidePoint, Box<dyn Error>> {
     let parts: Vec<&str> = s.split('|').collect();
     return match parts.len() {
         3 => {
-
             let dt = Utc::now();
             let ts = parse_time_string(dt, parts[0]);
             let level = parts[1].parse::<f32>().unwrap();
 
-            let tide =  match parts[2] {
+            let tide = match parts[2] {
                 "low" => TidePoint::new(dt, level, Tide::Low),
                 "high" => TidePoint::new(dt, level, Tide::High),
-                _ => bail!("tide term invalid; not 'high'||'low'")
+                _ => bail!("tide term invalid; not 'high'||'low'"),
             };
             Ok(tide)
         }
-        _ => bail!("invalid number of elements parsed from tide tuple") 
+        _ => bail!("invalid number of elements parsed from tide tuple"),
     };
 }
 
@@ -61,7 +92,7 @@ fn parse_time_string(today: DateTime<Utc>, s: &str) -> DateTime<Utc> {
     let h_adjusted = h + meridian;
 
     //
-    let dt = today 
+    let dt = today
         .with_hour(h_adjusted)
         .unwrap()
         .with_minute(m)
@@ -85,18 +116,17 @@ mod tests {
     // full ts
     const ts_data: &str = "3:35 AM";
     const ts_pm_data: &str = "9:11 PM";
-    
 
     #[test]
     fn test_parse_ts() {
-        let today = Utc.ymd(2021, 9, 27).and_hms(0,0,0);
+        let today = Utc.ymd(2021, 9, 27).and_hms(0, 0, 0);
         let res = parse_time_string(today, ts_data);
         assert_eq!(res.to_rfc2822(), "Mon, 27 Sep 2021 03:35:00 +0000");
     }
 
     #[test]
     fn test_parse_ts_pm() {
-        let today = Utc.ymd(2021, 9, 27).and_hms(0,0,0);
+        let today = Utc.ymd(2021, 9, 27).and_hms(0, 0, 0);
         let res = parse_time_string(today, ts_pm_data);
         assert_eq!(res.to_rfc2822(), "Mon, 27 Sep 2021 21:11:00 +0000");
     }
@@ -107,6 +137,12 @@ mod tests {
         let val = ret.unwrap();
         assert_eq!(val.level, 0.6);
         assert_eq!(val.tide, Tide::Low);
+    }
+
+    #[test]
+    fn test_full_parse() {
+        let res = parse_noaa_tides(tide_data);
+        assert!(res.is_ok());
     }
 }
 
