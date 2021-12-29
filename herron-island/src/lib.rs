@@ -1,10 +1,10 @@
 mod utils;
 
-use wasm_bindgen::prelude::*;
 use chrono::prelude::*;
 use chrono::{DateTime, Utc};
 use simple_error::bail;
 use std::error::Error;
+use wasm_bindgen::prelude::*;
 
 extern crate web_sys;
 
@@ -24,7 +24,7 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 // Call the JS alert() callback.
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-extern {
+extern "C" {
     unsafe fn alert(s: &str);
 }
 
@@ -97,13 +97,16 @@ fn parse_tide_tuple(s: &str) -> Result<TidePoint, Box<dyn Error>> {
             let level = parts[1].parse::<f32>().unwrap();
 
             let tide = match parts[2] {
-                "low" => TidePoint::new(dt, level, Tide::Low),
-                "high" => TidePoint::new(dt, level, Tide::High),
+                "low" => TidePoint::new(ts, level, Tide::Low),
+                "high" => TidePoint::new(ts, level, Tide::High),
                 _ => bail!("tide term invalid; not 'high'||'low'"),
             };
             Ok(tide)
         }
-        _ => bail!("invalid number of elements parsed from tide tuple"),
+        _ => {
+            log!("BAILING ON: {:?}", s);
+            bail!("invalid number of elements parsed from tide tuple")
+        }
     };
 }
 
@@ -112,15 +115,25 @@ fn parse_time_string(today: DateTime<Utc>, s: &str) -> DateTime<Utc> {
 
     // Parse the Hours, Minutes, and Meridian
     let h_m: Vec<&str> = ts_parts[0].split(':').collect();
-    let h: u32 = h_m[0].parse::<u32>().unwrap();
+    let h: u32 = match h_m[0].parse::<u32>().unwrap(){
+        12 => 0,
+        _ => h_m[0].parse::<u32>().unwrap(),
+    };
     let m: u32 = h_m[1].parse::<u32>().unwrap();
     let meridian: u32 = match ts_parts[1] {
         "PM" => 12,
         _ => 0,
     };
     let h_adjusted = h + meridian;
+    
+    /*log!(
+        "parse_time{:?}: {:?} parts:{:?} h_adjusted: {:?}",
+        today,
+        s,
+        ts_parts,
+       h_adjusted,
+    );*/
 
-    //
     let dt = today
         .with_hour(h_adjusted)
         .unwrap()
@@ -145,6 +158,11 @@ mod tests {
 4:57 PM|6.4|low 
 9:18 PM|9.9|high 
 9:18 PM|high"#;
+const special_12_data: &str = r#"12:15 AM|9.7|high 
+5:46 AM|4.8|low 
+12:14 PM|15.1|high 
+7:32 PM|1.9|low 
+7:32 PM|low"#;
     const single_data: &str = "3:35 AM|0.6|low";
     const tide_single: &str = "10:21 AM|15.1|high ";
 
@@ -183,7 +201,6 @@ mod tests {
         assert_eq!(val.tide, Tide::High);
     }
 
-
     #[test]
     fn test_full_parse() {
         let res = parse_noaa_tides(tide_data);
@@ -192,6 +209,15 @@ mod tests {
         let tides = res.unwrap();
         println!("{:?}", tides);
         //assert_eq!(t.level, 15.1);
+    }
+    
+    #[test]
+    fn test_0000_12_case() {
+        let res = parse_noaa_tides(special_12_data);
+        assert!(res.is_ok());
+
+        let tides = res.unwrap();
+        println!("{:?}", tides);
     }
 }
 
