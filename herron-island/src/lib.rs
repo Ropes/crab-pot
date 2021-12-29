@@ -33,7 +33,7 @@ pub fn greet(s: &str) {
     utils::set_panic_hook();
     let res = parse_noaa_tides(s).unwrap();
     let tides: String = res.iter().map(|t| t.to_string()).collect();
-    log!("{}", tides);
+    log!("{:?}", tides);
 
     alert(s);
 }
@@ -94,7 +94,7 @@ fn parse_tide_tuple(s: &str) -> Result<TidePoint, Box<dyn Error>> {
         3 => {
             let dt = Utc::now();
             let ts = parse_time_string(dt, parts[0]);
-            let level = parts[1].parse::<f32>().unwrap();
+            let level = parts[1].parse::<f32>()?;
 
             let tide = match parts[2] {
                 "low" => TidePoint::new(ts, level, Tide::Low),
@@ -115,7 +115,7 @@ fn parse_time_string(today: DateTime<Utc>, s: &str) -> DateTime<Utc> {
 
     // Parse the Hours, Minutes, and Meridian
     let h_m: Vec<&str> = ts_parts[0].split(':').collect();
-    let h: u32 = match h_m[0].parse::<u32>().unwrap(){
+    let h: u32 = match h_m[0].parse::<u32>().unwrap() {
         12 => 0,
         _ => h_m[0].parse::<u32>().unwrap(),
     };
@@ -125,7 +125,7 @@ fn parse_time_string(today: DateTime<Utc>, s: &str) -> DateTime<Utc> {
         _ => 0,
     };
     let h_adjusted = h + meridian;
-    
+
     /*log!(
         "parse_time{:?}: {:?} parts:{:?} h_adjusted: {:?}",
         today,
@@ -158,11 +158,17 @@ mod tests {
 4:57 PM|6.4|low 
 9:18 PM|9.9|high 
 9:18 PM|high"#;
-const special_12_data: &str = r#"12:15 AM|9.7|high 
+    const special_12_data: &str = r#"12:15 AM|9.7|high 
 5:46 AM|4.8|low 
 12:14 PM|15.1|high 
 7:32 PM|1.9|low 
 7:32 PM|low"#;
+    const weird_12_data: &str = r#"12:15 AM|9.7|high 
+5:46 AM|4.8|low 
+12:14 PM|15.1|high 
+7:32 PM|1.9|low 
+1:49 AM|high|NH"#;
+
     const single_data: &str = "3:35 AM|0.6|low";
     const tide_single: &str = "10:21 AM|15.1|high ";
 
@@ -210,10 +216,18 @@ const special_12_data: &str = r#"12:15 AM|9.7|high
         println!("{:?}", tides);
         //assert_eq!(t.level, 15.1);
     }
-    
+
     #[test]
     fn test_0000_12_case() {
         let res = parse_noaa_tides(special_12_data);
+        assert!(res.is_ok());
+
+        let tides = res.unwrap();
+        println!("{:?}", tides);
+    }
+    #[test]
+    fn test_weird_12_case() {
+        let res = parse_noaa_tides(weird_12_data);
         assert!(res.is_ok());
 
         let tides = res.unwrap();
