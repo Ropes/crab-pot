@@ -1,8 +1,9 @@
+use crate::utils::*;
 use crate::DrawResult;
-use plotters::prelude::*;
-use plotters_canvas::CanvasBackend;
 use chrono::prelude::*;
 use chrono::{DateTime, Utc};
+use plotters::prelude::*;
+use plotters_canvas::CanvasBackend;
 use simple_error::bail;
 use std::error::Error;
 use wasm_bindgen::prelude::*;
@@ -17,6 +18,27 @@ macro_rules! log {
     }
 }
 
+// Call the JS alert() callback.
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+extern "C" {
+    unsafe fn alert(s: &str);
+}
+
+#[wasm_bindgen]
+pub fn tide_alert(s: &str) {
+    set_panic_hook();
+    let res = parse_noaa_tides(s).unwrap();
+    let tides: String = res.iter().map(|t| t.to_string()).collect();
+    unsafe {
+        log!("{:?}", tides);
+    }
+
+    unsafe {
+        alert(s);
+    }
+}
+
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
 // allocator.
 #[cfg(feature = "wee_alloc")]
@@ -24,7 +46,10 @@ macro_rules! log {
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 /// Draw power function f(x) = x^power.
-pub fn draw(canvas_id: &str) -> DrawResult<impl Fn((i32, i32)) -> Option<(f32, f32)>> {
+pub fn draw(
+    canvas_id: &str,
+    tv: Vec<TidePoint>,
+) -> DrawResult<impl Fn((i32, i32)) -> Option<(f32, f32)>> {
     let backend = CanvasBackend::new(canvas_id).expect("cannot find canvas");
     let root = backend.into_drawing_area();
     let font: FontDesc = ("sans-serif", 20.0).into();
@@ -36,14 +61,15 @@ pub fn draw(canvas_id: &str) -> DrawResult<impl Fn((i32, i32)) -> Option<(f32, f
         .caption(format!("Tides on McMicken Island"), font)
         .x_label_area_size(30)
         .y_label_area_size(30)
-        .build_cartesian_2d(0f32..24f32, -5f32..18f32)?;
+        .build_cartesian_2d(0f32..24f32, -8f32..20f32)?;
 
     chart.configure_mesh().x_labels(3).y_labels(3).draw()?;
 
     chart.draw_series(LineSeries::new(
-        (0..=24)
-            .map(|x| x as f32 / 24.0)
-            .map(|x| (x, x.powf(12f32))),
+        tv.iter().map(|t| {
+            let (x, y) = t.to_xy();
+            (x, y)
+        }),
         &BLUE,
     ))?;
 
@@ -75,6 +101,16 @@ impl TidePoint {
 
     pub fn to_string(&self) -> String {
         return format!("{:?}::{}:{}", self.tide, self.dt, self.level);
+    }
+
+    pub fn to_xy(&self) -> (f32, f32) {
+        let y = self.level.as_f64();
+        let x = match self.dt.minute() {
+            0 => self.dt.hour().as_f64(),
+            _ => self.dt.hour().as_f64() + (self.dt.minute().as_f64() / 60f64),
+        };
+
+        (x as f32, y as f32)
     }
 }
 
