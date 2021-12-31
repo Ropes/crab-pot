@@ -4,9 +4,6 @@ mod mandelbrot;
 mod plot3d;
 mod tides;
 
-use chrono::prelude::*;
-use chrono::{DateTime, Utc};
-use simple_error::bail;
 use std::error::Error;
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;

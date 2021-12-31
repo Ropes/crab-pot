@@ -1,13 +1,16 @@
 use crate::utils::*;
 use crate::DrawResult;
+use bacon_sci::interp::lagrange;
+use bacon_sci::polynomial::Polynomial;
 use chrono::prelude::*;
 use chrono::{DateTime, Utc};
+use plotters;
+use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::*;
 use plotters_canvas::CanvasBackend;
 use simple_error::bail;
 use std::error::Error;
 use wasm_bindgen::prelude::*;
-use web_sys::HtmlCanvasElement;
 
 extern crate web_sys;
 
@@ -53,7 +56,6 @@ pub fn draw(
     let backend = CanvasBackend::new(canvas_id).expect("cannot find canvas");
     let root = backend.into_drawing_area();
     let font: FontDesc = ("sans-serif", 20.0).into();
-
     root.fill(&WHITE)?;
 
     let mut chart = ChartBuilder::on(&root)
@@ -65,13 +67,91 @@ pub fn draw(
 
     chart.configure_mesh().x_labels(3).y_labels(3).draw()?;
 
+    // Dot and label each high/low tide from TidePoint
+    /*
+    let dot_and_label = |x: f32, y: f32| {
+        return EmptyElement::at((x, y))
+            + Circle::new((0, 0), 3, ShapeStyle::from(&BLACK).filled())
+            + Text::new(
+                format!("({:.2},{:.2})", x, y),
+                (10, 0),
+                ("sans-serif", 15.0).into_font(),
+            );
+    };
+    */
+
+    // Interpolate series of points between Tide points
+    let mut xs: Vec<f32> = Vec::new();
+    let mut ys: Vec<f32> = Vec::new();
+    tv.iter().for_each(|t| {
+        let (x, y) = t.to_xy();
+        xs.push(x);
+        ys.push(y);
+    });
+    // TODO: Approximate the previous days final tide, and first tide of next day
+
+    let poly = lagrange(&xs, &ys, 1e-6).unwrap();
+    chart.draw_series(LineSeries::new(
+        (0..100).map(|f| f as f32 * (24.0f32 / 100.0f32)).map(|f| {
+            let x = f;
+            let y = poly.evaluate(x);
+
+            (x, y)
+        }),
+        &BLUE,
+    ))?;
+
     chart.draw_series(LineSeries::new(
         tv.iter().map(|t| {
             let (x, y) = t.to_xy();
             (x, y)
         }),
-        &BLUE,
+        &BLACK,
     ))?;
+
+    chart.draw_series(tv.iter().map(|t| {
+        let (x, y) = t.to_xy();
+        return Circle::new((x, y), 3, ShapeStyle::from(&RED));
+    }))?;
+
+    /*
+    chart.draw_series(tv.iter().map(|t| {
+            let (x, y) = t.to_xy();
+            let c = Coord(x,y);
+            return EmptyElement::at(c)
+                + Circle::New((0, 0), s, style.filled())
+                + Box::new(Text::new(format!("{:?}", c), (10, 0), ("sans-serif", 10).into_font()))
+        }))?;
+        */
+
+    /* TODO: unfuck?
+    chart.draw_series(PointSeries::of_element(
+        tv.iter().map(|t| {
+            let (x, y) = t.to_xy();
+            //let c = Circle::new((x, y), 3, ShapeStyle::from(&RED).filled());
+            (x, y)
+        }),
+        5,
+        &RED,
+        |c, s, style| {
+            return EmptyElement::at(c)
+                + Circle::New((0, 0), s, style.filled())
+                + Box::new(Text::new(format!("{:?}", c), (10, 0), ("sans-serif", 10).into_font()))
+        },
+    ))?;
+    */
+
+    /*
+    chart.draw_series(tv.iter().map(|t| {
+        let (x, y) = t.to_xy();
+        let txt = Text::new(
+            format!("({:.2},{:.2})", x, y),
+            (10, 0),
+            ("sans-serif", 15.0).into_font(),
+        );
+        txt
+    }))?;
+    */
 
     root.present()?;
     return Ok(chart.into_coord_trans());
