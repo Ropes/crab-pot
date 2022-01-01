@@ -1,15 +1,16 @@
+
+use std::error::Error;
 use crate::utils::*;
 use crate::DrawResult;
 use bacon_sci::interp::lagrange;
 use bacon_sci::polynomial::Polynomial;
 use chrono::prelude::*;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use plotters;
 use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::*;
 use plotters_canvas::CanvasBackend;
 use simple_error::bail;
-use std::error::Error;
 use wasm_bindgen::prelude::*;
 
 extern crate web_sys;
@@ -78,19 +79,22 @@ pub fn draw(
                 ("sans-serif", 15.0).into_font(),
             );
     };
+    chart.draw_series(LineSeries::new(
+        tv.iter().map(|t| {
+            let (x, y) = t.to_xy();
+            (x, y)
+        }),
+        &BLACK,
+    ))?;
     */
 
-    // Interpolate series of points between Tide points
-    let mut xs: Vec<f32> = Vec::new();
-    let mut ys: Vec<f32> = Vec::new();
-    tv.iter().for_each(|t| {
+    chart.draw_series(tv.iter().map(|t| {
         let (x, y) = t.to_xy();
-        xs.push(x);
-        ys.push(y);
-    });
-    // TODO: Approximate the previous days final tide, and first tide of next day
+        return Circle::new((x, y), 3, ShapeStyle::from(&RED));
+    }))?;
 
-    let poly = lagrange(&xs, &ys, 1e-6).unwrap();
+    /*
+    let poly = poly_from_vec(tv);
     chart.draw_series(LineSeries::new(
         (0..100).map(|f| f as f32 * (24.0f32 / 100.0f32)).map(|f| {
             let x = f;
@@ -100,19 +104,15 @@ pub fn draw(
         }),
         &BLUE,
     ))?;
-
+    */
+    let XYs = points_from_vec(tv);
+    log!("XYs read: {:?}", XYs.len());
     chart.draw_series(LineSeries::new(
-        tv.iter().map(|t| {
-            let (x, y) = t.to_xy();
-            (x, y)
-        }),
-        &BLACK,
+       XYs.iter().map(|(x,y)|{ 
+           (x.clone(),y.clone())
+        }), 
+        &BLUE,
     ))?;
-
-    chart.draw_series(tv.iter().map(|t| {
-        let (x, y) = t.to_xy();
-        return Circle::new((x, y), 3, ShapeStyle::from(&RED));
-    }))?;
 
     /*
     chart.draw_series(tv.iter().map(|t| {
@@ -157,13 +157,107 @@ pub fn draw(
     return Ok(chart.into_coord_trans());
 }
 
-#[derive(PartialEq, Debug)]
+fn points_from_vec(tv: Vec<TidePoint>) -> Vec<(f32, f32)> {
+    // Interpolate series of points between Tide points
+    // TODO: Approximate the previous days final tide, and first tide of next day
+    let today_start = tv[0].dt.date().clone().and_hms(0, 0, 0);
+    let tomorrow_start = today_start + Duration::days(1);
+    let first_t = tv[0].dt;
+    let last_t = tv[3].dt;
+    let zero_to_first = first_t - today_start;
+    let last_to_24 = tomorrow_start - last_t;
+    let tide_space = zero_to_first + last_to_24;
+
+    unsafe {
+        log!("next tide timing: {:?} for {:?}", tide_space, today_start);
+    }
+    let yesterday_last_tide = TidePoint::new(tv[0].dt - tide_space, tv[3].level, tv[3].tide);
+    let tomorrow_first_tide = TidePoint::new(tv[3].dt + tide_space, tv[0].level, tv[0].tide);
+    unsafe {
+        log!("yesterday tide: {:?}", yesterday_last_tide);
+        log!("tomorrow tide: {:?}", tomorrow_first_tide);
+    }
+
+    let mut poly_vec = Vec::<&TidePoint>::new();
+    tv.iter().for_each(|t| poly_vec.push(t));
+
+    let mut xs: Vec<f32> = Vec::new();
+    let mut ys: Vec<f32> = Vec::new();
+    // Insert prev day's tide
+    let (x, y) = yesterday_last_tide.to_xy();
+    xs.push(x - 24.0f32);
+    ys.push(y);
+    poly_vec.iter().for_each(|t| {
+        let (x, y) = t.to_xy();
+        xs.push(x);
+        ys.push(y);
+    });
+    // Push next day's tide
+    let (x, y) = tomorrow_first_tide.to_xy();
+    xs.push(x + 24.0f32);
+    ys.push(y);
+    xs.iter().for_each(|x| log!("x: {:?}", x));
+
+    let mut tideX: Vec<f32> = Vec::new();
+    let mut tideY: Vec<f32> = Vec::new();
+
+    for i in 1..xs.len() {
+        let x_origin = xs[i-1]; // x0 ...
+        let y_origin = ys[i-1]; // y0 ...
+        log!("x_origin: {:?} y_origin: {:?}", x_origin, y_origin);
+        tideX.push(x_origin);
+        tideY.push(y_origin);
+        
+        let y_delta = ys[i] - y_origin;
+        let x_delta = xs[i] - x_origin;
+        log!("x_delta: {:?} y_delta: {:?}", x_delta, y_delta);
+
+        let x_inc = x_delta/25f32;
+        let mut pi_step = std::f32::consts::PI;
+        /* 
+        if y_delta > 0f32{
+            // Tide increasing; start cosine calculations from pi
+            pi_step += std::f32::consts::PI; 
+        }
+        */
+        log!("pi_step: {:?}", pi_step);
+
+        let mut x_step = x_origin + x_inc;
+        while x_step < xs[i] {
+            tideX.push(x_step);
+            // calculate Y
+            // --------------------------
+            let x_percentage = ((x_step - x_origin) / x_delta);
+            log!("x_percentage: {:?}", x_percentage);
+            let to_cosine = ((x_percentage * std::f32::consts::PI) + pi_step);
+            log!("to_cosine: {:?}", to_cosine);
+            let y_multiplier = (to_cosine.cos()+1f32)/2f32;
+            log!("y_val: ({:?} * {:?}) {:?}", y_multiplier, y_delta, y_origin);
+            let y_val = (y_multiplier * y_delta) + y_origin;
+            tideY.push(y_val);
+            log!("x: {:?}, y: {:?}", x_step, y_val);
+            x_step += x_inc;
+        }
+    }
+
+    let mut ret = Vec::<(f32, f32)>::new();
+    for (_, (x,y)) in  tideX.iter().zip(tideY.iter()).enumerate(){
+        ret.push((x.clone(),y.clone()));
+    };
+
+    // calculate the prev-next day tide X offsets and pre-append to the xs,ys
+    //let poly = lagrange(&tideX, &tideY, 1e-6).unwrap();
+    //poly
+    ret
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Tide {
     High,
     Low,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TidePoint {
     dt: DateTime<Utc>,
     level: f32,
