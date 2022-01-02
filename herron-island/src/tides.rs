@@ -65,7 +65,7 @@ pub fn draw(
         .y_label_area_size(30)
         .build_cartesian_2d(0f32..24f32, -8f32..20f32)?;
 
-    chart.configure_mesh().x_labels(3).y_labels(3).draw()?;
+    chart.configure_mesh().disable_x_mesh().x_labels(5).x_desc("24hr time").y_labels(5).y_desc("Sea Level").draw()?;
 
     // Dot and label each high/low tide from TidePoint
     /*
@@ -100,7 +100,12 @@ pub fn draw(
     let XYs = points_from_vec(tv.to_owned());
     log!("XYs read: {:?}", XYs.len());
     chart.draw_series(LineSeries::new(
-        XYs.iter().map(|(x, y)| (x.clone(), y.clone())),
+        XYs.iter().filter_map(|(x, y)| {
+            if *x > 0f32 && *x < 24f32 {
+                return Some((x.clone(), y.clone()));
+            }
+            return None;
+        }),
         &BLUE,
     ))?;
 
@@ -109,9 +114,15 @@ pub fn draw(
         5,
         ShapeStyle::from(&RED).filled(),
         &|coord, size, style| {
-            EmptyElement::at(coord)
+            let hour = coord.0 as i32;
+            let minutes = ((coord.0.as_f64() - hour.as_f64()) * 60f64).round();
+            return EmptyElement::at(coord)
                 + Circle::new((0, 0), size, style)
-                + Text::new(format!("{:?}", coord), (0, 15), ("sans-serif", 15))
+                + Text::new(
+                    format!("[{}:{}] {:?}", hour, minutes, coord.1),
+                    (-40, 15),
+                    ("sans-serif", 15),
+                );
         },
     ))?;
 
