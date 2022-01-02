@@ -1,5 +1,3 @@
-
-use std::error::Error;
 use crate::utils::*;
 use crate::DrawResult;
 use bacon_sci::interp::lagrange;
@@ -11,6 +9,7 @@ use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::*;
 use plotters_canvas::CanvasBackend;
 use simple_error::bail;
+use std::error::Error;
 use wasm_bindgen::prelude::*;
 
 extern crate web_sys;
@@ -92,51 +91,40 @@ pub fn draw(
         let (x, y) = t.to_xy();
         return Circle::new((x, y), 3, ShapeStyle::from(&RED));
     }))?;
+    let mut poly_vec = Vec::<(f32, f32)>::new();
+    tv.iter().for_each(|t| {
+        let z = t.to_xy();
+        poly_vec.push(z);
+    });
 
-    /*
-    let poly = poly_from_vec(tv);
-    chart.draw_series(LineSeries::new(
-        (0..100).map(|f| f as f32 * (24.0f32 / 100.0f32)).map(|f| {
-            let x = f;
-            let y = poly.evaluate(x);
-
-            (x, y)
-        }),
-        &BLUE,
-    ))?;
-    */
-    let XYs = points_from_vec(tv);
+    let XYs = points_from_vec(tv.to_owned());
     log!("XYs read: {:?}", XYs.len());
     chart.draw_series(LineSeries::new(
-       XYs.iter().map(|(x,y)|{ 
-           (x.clone(),y.clone())
-        }), 
+        XYs.iter().map(|(x, y)| (x.clone(), y.clone())),
         &BLUE,
     ))?;
 
-    /*
-    chart.draw_series(tv.iter().map(|t| {
-            let (x, y) = t.to_xy();
-            let c = Coord(x,y);
-            return EmptyElement::at(c)
-                + Circle::New((0, 0), s, style.filled())
-                + Box::new(Text::new(format!("{:?}", c), (10, 0), ("sans-serif", 10).into_font()))
-        }))?;
-        */
+    chart.draw_series(PointSeries::of_element(
+        tv.to_owned().iter().map(|t| t.to_xy()),
+        5,
+        ShapeStyle::from(&RED).filled(),
+        &|coord, size, style| {
+            EmptyElement::at(coord)
+                + Circle::new((0, 0), size, style)
+                + Text::new(format!("{:?}", coord), (0, 15), ("sans-serif", 15))
+        },
+    ))?;
 
-    /* TODO: unfuck?
+    /*
     chart.draw_series(PointSeries::of_element(
         tv.iter().map(|t| {
             let (x, y) = t.to_xy();
-            //let c = Circle::new((x, y), 3, ShapeStyle::from(&RED).filled());
             (x, y)
         }),
         5,
         &RED,
         |c, s, style| {
-            return EmptyElement::at(c)
-                + Circle::New((0, 0), s, style.filled())
-                + Box::new(Text::new(format!("{:?}", c), (10, 0), ("sans-serif", 10).into_font()))
+            return &EmptyElement::at(c)
         },
     ))?;
     */
@@ -202,25 +190,17 @@ fn points_from_vec(tv: Vec<TidePoint>) -> Vec<(f32, f32)> {
     let mut tideY: Vec<f32> = Vec::new();
 
     for i in 1..xs.len() {
-        let x_origin = xs[i-1]; // x0 ...
-        let y_origin = ys[i-1]; // y0 ...
+        let x_origin = xs[i - 1]; // x0 ...
+        let y_origin = ys[i - 1]; // y0 ...
         log!("x_origin: {:?} y_origin: {:?}", x_origin, y_origin);
         tideX.push(x_origin);
         tideY.push(y_origin);
-        
+
         let y_delta = ys[i] - y_origin;
         let x_delta = xs[i] - x_origin;
         log!("x_delta: {:?} y_delta: {:?}", x_delta, y_delta);
 
-        let x_inc = x_delta/25f32;
-        let mut pi_step = std::f32::consts::PI;
-        /* 
-        if y_delta > 0f32{
-            // Tide increasing; start cosine calculations from pi
-            pi_step += std::f32::consts::PI; 
-        }
-        */
-        log!("pi_step: {:?}", pi_step);
+        let x_inc = x_delta / 25f32;
 
         let mut x_step = x_origin + x_inc;
         while x_step < xs[i] {
@@ -228,22 +208,19 @@ fn points_from_vec(tv: Vec<TidePoint>) -> Vec<(f32, f32)> {
             // calculate Y
             // --------------------------
             let x_percentage = ((x_step - x_origin) / x_delta);
-            log!("x_percentage: {:?}", x_percentage);
-            let to_cosine = ((x_percentage * std::f32::consts::PI) + pi_step);
-            log!("to_cosine: {:?}", to_cosine);
-            let y_multiplier = (to_cosine.cos()+1f32)/2f32;
-            log!("y_val: ({:?} * {:?}) {:?}", y_multiplier, y_delta, y_origin);
+            let to_cosine = ((x_percentage * std::f32::consts::PI) + std::f32::consts::PI);
+            let y_multiplier = (to_cosine.cos() + 1f32) / 2f32;
             let y_val = (y_multiplier * y_delta) + y_origin;
             tideY.push(y_val);
-            log!("x: {:?}, y: {:?}", x_step, y_val);
+            //log!("x: {:?}, y: {:?}", x_step, y_val);
             x_step += x_inc;
         }
     }
 
     let mut ret = Vec::<(f32, f32)>::new();
-    for (_, (x,y)) in  tideX.iter().zip(tideY.iter()).enumerate(){
-        ret.push((x.clone(),y.clone()));
-    };
+    for (_, (x, y)) in tideX.iter().zip(tideY.iter()).enumerate() {
+        ret.push((x.clone(), y.clone()));
+    }
 
     // calculate the prev-next day tide X offsets and pre-append to the xs,ys
     //let poly = lagrange(&tideX, &tideY, 1e-6).unwrap();
