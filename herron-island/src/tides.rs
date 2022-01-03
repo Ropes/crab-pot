@@ -1,7 +1,5 @@
 use crate::utils::*;
 use crate::DrawResult;
-use bacon_sci::interp::lagrange;
-use bacon_sci::polynomial::Polynomial;
 use chrono::prelude::*;
 use chrono::{DateTime, Duration, Utc};
 use plotters;
@@ -65,7 +63,13 @@ pub fn draw(
         .y_label_area_size(30)
         .build_cartesian_2d(0f32..24f32, -8f32..20f32)?;
 
-    chart.configure_mesh().disable_x_mesh().x_labels(5).x_desc("24hr time").y_labels(5).y_desc("Sea Level").draw()?;
+    chart
+        .configure_mesh()
+        .x_labels(7)
+        .x_desc("24hr time")
+        .y_labels(5)
+        .y_desc("Sea Level")
+        .draw()?;
 
     // Dot and label each high/low tide from TidePoint
     /*
@@ -97,10 +101,10 @@ pub fn draw(
         poly_vec.push(z);
     });
 
-    let XYs = points_from_vec(tv.to_owned());
-    log!("XYs read: {:?}", XYs.len());
+    let xys = points_from_vec(tv.to_owned());
+    log!("XYs read: {:?}", xys.len());
     chart.draw_series(LineSeries::new(
-        XYs.iter().filter_map(|(x, y)| {
+        xys.iter().filter_map(|(x, y)| {
             if *x > 0f32 && *x < 24f32 {
                 return Some((x.clone(), y.clone()));
             }
@@ -197,15 +201,15 @@ fn points_from_vec(tv: Vec<TidePoint>) -> Vec<(f32, f32)> {
     ys.push(y);
     xs.iter().for_each(|x| log!("x: {:?}", x));
 
-    let mut tideX: Vec<f32> = Vec::new();
-    let mut tideY: Vec<f32> = Vec::new();
+    let mut tide_x: Vec<f32> = Vec::new();
+    let mut tide_y: Vec<f32> = Vec::new();
 
     for i in 1..xs.len() {
         let x_origin = xs[i - 1]; // x0 ...
         let y_origin = ys[i - 1]; // y0 ...
         log!("x_origin: {:?} y_origin: {:?}", x_origin, y_origin);
-        tideX.push(x_origin);
-        tideY.push(y_origin);
+        tide_x.push(x_origin);
+        tide_y.push(y_origin);
 
         let y_delta = ys[i] - y_origin;
         let x_delta = xs[i] - x_origin;
@@ -215,21 +219,21 @@ fn points_from_vec(tv: Vec<TidePoint>) -> Vec<(f32, f32)> {
 
         let mut x_step = x_origin + x_inc;
         while x_step < xs[i] {
-            tideX.push(x_step);
+            tide_x.push(x_step);
             // calculate Y
             // --------------------------
-            let x_percentage = ((x_step - x_origin) / x_delta);
-            let to_cosine = ((x_percentage * std::f32::consts::PI) + std::f32::consts::PI);
+            let x_percentage = (x_step - x_origin) / x_delta;
+            let to_cosine = (x_percentage * std::f32::consts::PI) + std::f32::consts::PI;
             let y_multiplier = (to_cosine.cos() + 1f32) / 2f32;
             let y_val = (y_multiplier * y_delta) + y_origin;
-            tideY.push(y_val);
+            tide_y.push(y_val);
             //log!("x: {:?}, y: {:?}", x_step, y_val);
             x_step += x_inc;
         }
     }
 
     let mut ret = Vec::<(f32, f32)>::new();
-    for (_, (x, y)) in tideX.iter().zip(tideY.iter()).enumerate() {
+    for (_, (x, y)) in tide_x.iter().zip(tide_y.iter()).enumerate() {
         ret.push((x.clone(), y.clone()));
     }
 
