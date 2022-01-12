@@ -65,7 +65,7 @@ pub fn draw(
 
     chart
         .configure_mesh()
-        .x_labels(7)
+        .x_labels(6)
         .x_desc("24hr time")
         .y_labels(5)
         .y_desc("Sea Level")
@@ -95,6 +95,8 @@ pub fn draw(
         let (x, y) = t.to_xy();
         return Circle::new((x, y), 3, ShapeStyle::from(&RED));
     }))?;
+    log!("circles drawn: tv: {:?}", tv.len());
+
     let mut poly_vec = Vec::<(f32, f32)>::new();
     tv.iter().for_each(|t| {
         let z = t.to_xy();
@@ -102,7 +104,7 @@ pub fn draw(
     });
 
     let xys = points_from_vec(tv.to_owned());
-    log!("XYs read: {:?}", xys.len());
+    log!("xys read: {:?}", xys.len());
     chart.draw_series(LineSeries::new(
         xys.iter().filter_map(|(x, y)| {
             if *x > 0f32 && *x < 24f32 {
@@ -130,32 +132,6 @@ pub fn draw(
         },
     ))?;
 
-    /*
-    chart.draw_series(PointSeries::of_element(
-        tv.iter().map(|t| {
-            let (x, y) = t.to_xy();
-            (x, y)
-        }),
-        5,
-        &RED,
-        |c, s, style| {
-            return &EmptyElement::at(c)
-        },
-    ))?;
-    */
-
-    /*
-    chart.draw_series(tv.iter().map(|t| {
-        let (x, y) = t.to_xy();
-        let txt = Text::new(
-            format!("({:.2},{:.2})", x, y),
-            (10, 0),
-            ("sans-serif", 15.0).into_font(),
-        );
-        txt
-    }))?;
-    */
-
     root.present()?;
     return Ok(chart.into_coord_trans());
 }
@@ -163,10 +139,11 @@ pub fn draw(
 fn points_from_vec(tv: Vec<TidePoint>) -> Vec<(f32, f32)> {
     // Interpolate series of points between Tide points
     // TODO: Approximate the previous days final tide, and first tide of next day
+    let tide_cnt = tv.len();
     let today_start = tv[0].dt.date().clone().and_hms(0, 0, 0);
     let tomorrow_start = today_start + Duration::days(1);
     let first_t = tv[0].dt;
-    let last_t = tv[3].dt;
+    let last_t = tv[tide_cnt - 1].dt;
     let zero_to_first = first_t - today_start;
     let last_to_24 = tomorrow_start - last_t;
     let tide_space = zero_to_first + last_to_24;
@@ -174,8 +151,20 @@ fn points_from_vec(tv: Vec<TidePoint>) -> Vec<(f32, f32)> {
     unsafe {
         log!("next tide timing: {:?} for {:?}", tide_space, today_start);
     }
-    let yesterday_last_tide = TidePoint::new(tv[0].dt - tide_space, tv[3].level, tv[3].tide);
-    let tomorrow_first_tide = TidePoint::new(tv[3].dt + tide_space, tv[0].level, tv[0].tide);
+
+    let (yesterday_last_tide, tomorrow_first_tide) = match tide_cnt {
+        _ => (
+            TidePoint::new(
+                tv[0].dt - tide_space,
+                tv[tide_cnt - 1].level,
+                tv[tide_cnt - 1].tide,
+            ),
+            TidePoint::new(tv[tide_cnt - 1].dt + tide_space, tv[0].level, tv[0].tide),
+        ),
+        3 => { // The odd/rare case where there are only three tides in a 24hour span
+        }
+    };
+
     unsafe {
         log!("yesterday tide: {:?}", yesterday_last_tide);
         log!("tomorrow tide: {:?}", tomorrow_first_tide);
@@ -382,6 +371,10 @@ mod tests {
 12:14 PM|15.1|high 
 7:32 PM|1.9|low 
 1:49 AM|high|NH"#;
+    const weird_midnight_data: &str = r#"6:54 AM|16.1|high 
+12:18 PM|8.6|low 
+4:42 PM|14.5|high 
+12:10 AM|low|NL"#;
 
     const single_data: &str = "3:35 AM|0.6|low";
     const tide_single: &str = "10:21 AM|15.1|high ";
@@ -442,6 +435,15 @@ mod tests {
     #[test]
     fn test_weird_12_case() {
         let res = parse_noaa_tides(weird_12_data);
+        assert!(res.is_ok());
+
+        let tides = res.unwrap();
+        println!("{:?}", tides);
+    }
+
+    #[test]
+    fn test_weird_3_tides_per24hr_case() {
+        let res = parse_noaa_tides(weird_midnight_data);
         assert!(res.is_ok());
 
         let tides = res.unwrap();

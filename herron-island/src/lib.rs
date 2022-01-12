@@ -1,7 +1,4 @@
 mod utils;
-mod func_plot;
-mod mandelbrot;
-mod plot3d;
 mod tides;
 
 use std::error::Error;
@@ -64,39 +61,14 @@ pub struct Point {
 
 #[wasm_bindgen]
 impl Chart {
-    /// Draw provided power function on the canvas element using it's id.
-    /// Return `Chart` struct suitable for coordinate conversion.
-    pub fn power(canvas_id: &str, power: i32) -> Result<Chart, JsValue> {
-        let map_coord = func_plot::draw(canvas_id, power).map_err(|err| err.to_string())?;
-        Ok(Chart {
-            convert: Box::new(move |coord| map_coord(coord).map(|(x, y)| (x.into(), y.into()))),
-        })
-    }
-
     // Draw Tides on provided canvas element
     // Return Chart struct suitable for Coordinate conversion from (f32, f32)...?
     pub fn tides(canvas_id: &str, raw_tides: &str) -> Result<Chart, JsValue> {
         let tv = parse_noaa_tides(raw_tides).unwrap();
         let map_coord = tides::draw(canvas_id, tv).map_err(|err| err.to_string())?;
-        //let mc = tides::draw(canvas_id, tv);
         Ok(Chart{
             convert: Box::new(move |coord| map_coord(coord).map(|(x, y)| (x.into(), y.into()))),
         })
-    }
-
-    /// Draw Mandelbrot set on the provided canvas element.
-    /// Return `Chart` struct suitable for coordinate conversion.
-    pub fn mandelbrot(canvas: HtmlCanvasElement) -> Result<Chart, JsValue> {
-        let map_coord = mandelbrot::draw(canvas).map_err(|err| err.to_string())?;
-        Ok(Chart {
-            convert: Box::new(map_coord),
-        })
-    }
-
-
-    pub fn plot3d(canvas: HtmlCanvasElement, pitch: f64, yaw: f64) -> Result<(), JsValue> {
-        plot3d::draw(canvas, pitch, yaw).map_err(|err| err.to_string())?;
-        Ok(())
     }
 
     /// This function can be used to convert screen coordinates to
