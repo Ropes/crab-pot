@@ -2,7 +2,7 @@ use crate::utils::*;
 use crate::DrawResult;
 use chrono::prelude::*;
 use chrono::Offset;
-use chrono::{DateTime, Date, Duration, FixedOffset, TimeZone, Utc, Local};
+use chrono::{Date, DateTime, Duration, FixedOffset, Local, TimeZone, Utc};
 use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::*;
 use plotters::{self, coord};
@@ -15,40 +15,24 @@ use wasm_bindgen::prelude::*;
 extern crate web_sys;
 
 // A macro to provide `println!(..)`-style syntax for `console.log` logging.
-macro_rules! log {
+macro_rules! log_wasm {
     ( $( $t:tt )* ) => {
         web_sys::console::log_1(&format!( $( $t )* ).into());
     }
 }
 
-/*
-#[cfg(all(target_family = "unix")]
+#[cfg(target_family = "unix")]
 macro_rules! log {
     ( $( $t:tt )* ) => {
         println!( $( $t )* );
     }
 }
-*/
 
 // Call the JS alert() callback.
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 extern "C" {
     unsafe fn alert(s: &str);
-}
-
-#[wasm_bindgen]
-pub fn tide_alert(s: &str) {
-    set_panic_hook();
-    let res = parse_noaa_tides(s).unwrap();
-    let tides: String = res.iter().map(|t| t.to_string()).collect();
-    unsafe {
-        log!("{:?}", tides);
-    }
-
-    unsafe {
-        alert(s);
-    }
 }
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
@@ -69,14 +53,14 @@ pub fn draw(
 
     // Find the local date, flatten to naive date, then convert it to a UTC date.
     let l = Local::now()
-            .with_hour(0)
-            .unwrap()
-            .with_minute(0)
-            .unwrap()
-            .with_second(0)
-            .unwrap();
+        .with_hour(0)
+        .unwrap()
+        .with_minute(0)
+        .unwrap()
+        .with_second(0)
+        .unwrap();
     let neh = l.naive_local();
-    let today = Utc.from_local_datetime( &neh).unwrap();
+    let today = Utc.from_local_datetime(&neh).unwrap();
 
     let mut chart = ChartBuilder::on(&root)
         .margin(20)
@@ -114,7 +98,7 @@ pub fn draw(
     */
 
     let xys = coordinates_from_prediction(tv.to_owned(), today);
-    log!("xys read: {:?}", xys.len());
+    log_wasm!("xys read: {:?}", xys.len());
     chart.draw_series(LineSeries::new(
         xys.iter().filter_map(|(x, y)| {
             if *x > 0f32 && *x < 24f32 {
@@ -125,11 +109,21 @@ pub fn draw(
         &BLUE,
     ))?;
 
-    chart.draw_series(tv.iter().map(|t| {
+    let valid_tp: Vec<&TidePoint> = tv
+        .iter()
+        .filter_map(|x| {
+            if x.dt > today && x.dt < today + Duration::days(1) {
+                return Some(x);
+            }
+            None
+        })
+        .collect();
+
+    chart.draw_series(valid_tp.iter().map(|t| {
         let (x, y) = t.to_xy();
         return Circle::new((x, y), 3, ShapeStyle::from(&RED));
     }))?;
-    log!("circles drawn: tv: {:?}", tv.len());
+    log_wasm!("circles drawn: tv: {:?}", tv.len());
 
     let mut poly_vec = Vec::<(f32, f32)>::new();
     tv.iter().for_each(|t| {
@@ -137,9 +131,8 @@ pub fn draw(
         poly_vec.push(z);
     });
 
-
     chart.draw_series(PointSeries::of_element(
-        tv.to_owned().iter().map(|t| t.to_xy()),
+        valid_tp.to_owned().iter().map(|t| t.to_xy()),
         5,
         ShapeStyle::from(&RED).filled(),
         &|coord, size, style| {
@@ -162,7 +155,6 @@ pub fn draw(
 fn coordinates_from_prediction(tv: Vec<TidePoint>, today: DateTime<Utc>) -> Vec<(f32, f32)> {
     let chart_start = today - Duration::hours(12);
     let chart_end = chart_start + Duration::days(2);
-    log!("start: {} end: {}", chart_start, chart_end);
 
     // Tide local maximums
     let mut xs: Vec<f32> = Vec::new();
@@ -181,14 +173,11 @@ fn coordinates_from_prediction(tv: Vec<TidePoint>, today: DateTime<Utc>) -> Vec<
 
     valid_tp.iter().for_each(|t| {
         let (x, y) = t.to_xy();
-        log!("tidepoint[{}]:[{}, {}]", t.dt, x, y);
         if t.dt < today {
-            let x_adj = x - 24f32 ;
+            let x_adj = x - 24f32;
             xs.push(x_adj);
-            log!("x-adjusted: {}", x_adj);
         } else if t.dt > today + Duration::hours(24) {
             let x_adj = 24f32 + x;
-            log!("x-adjusted: {}", x_adj);
             xs.push(x_adj);
         } else {
             xs.push(x);
@@ -203,13 +192,11 @@ fn coordinates_from_prediction(tv: Vec<TidePoint>, today: DateTime<Utc>) -> Vec<
     for i in 1..xs.len() {
         let x_origin = xs[i - 1]; // x0 ...
         let y_origin = ys[i - 1]; // y0 ...
-        log!("x_origin: {:?} y_origin: {:?}", x_origin, y_origin);
         tide_x.push(x_origin);
         tide_y.push(y_origin);
 
         let y_delta = ys[i] - y_origin;
         let x_delta = xs[i] - x_origin;
-        log!("x_delta: {:?} y_delta: {:?}", x_delta, y_delta);
 
         let x_inc = x_delta / 25f32;
 
@@ -223,7 +210,6 @@ fn coordinates_from_prediction(tv: Vec<TidePoint>, today: DateTime<Utc>) -> Vec<
             let y_multiplier = (to_cosine.cos() + 1f32) / 2f32;
             let y_val = (y_multiplier * y_delta) + y_origin;
             tide_y.push(y_val);
-            //log!("x: {:?}, y: {:?}", x_step, y_val);
             x_step += x_inc;
         }
     }
@@ -331,27 +317,6 @@ mod tests {
     use chrono::prelude::*;
     use chrono::{DateTime, TimeZone, Utc};
 
-    //const tide_data: &str ="3:35 AM|0.6|low 10:23 AM|12.3|high 4:06 PM|6.9|low 9:11 PM|11.7|high 9:11 PM|high";
-    const tide_data: &str = r#"3:08 AM|0.5|low 
-10:21 AM|15.1|high 
-4:57 PM|6.4|low 
-9:18 PM|9.9|high 
-9:18 PM|high"#;
-    const special_12_data: &str = r#"12:15 AM|9.7|high 
-5:46 AM|4.8|low 
-12:14 PM|15.1|high 
-7:32 PM|1.9|low 
-7:32 PM|low"#;
-    const weird_12_data: &str = r#"12:15 AM|9.7|high 
-5:46 AM|4.8|low 
-12:14 PM|15.1|high 
-7:32 PM|1.9|low 
-1:49 AM|high|NH"#;
-    const weird_midnight_data: &str = r#"6:54 AM|16.1|high 
-12:18 PM|8.6|low 
-4:42 PM|14.5|high 
-12:10 AM|low|NL"#;
-
     const predicted_json_data: &str = r#"{ "predictions" : [{"t":"2022-01-10 05:05", "v":"5.086", "type":"L"},{"t":"2022-01-10 11:32", "v":"14.668", "type":"H"},{"t":"2022-01-10 19:03", "v":"2.498", "type":"L"},{"t":"2022-01-11 01:42", "v":"10.228", "type":"H"},{"t":"2022-01-11 06:15", "v":"6.854", "type":"L"},{"t":"2022-01-11 12:11", "v":"14.150", "type":"H"},{"t":"2022-01-11 19:51", "v":"1.503", "type":"L"},{"t":"2022-01-12 03:19", "v":"11.508", "type":"H"},{"t":"2022-01-12 07:45", "v":"8.101", "type":"L"},{"t":"2022-01-12 12:51", "v":"13.639", "type":"H"},{"t":"2022-01-12 20:33", "v":"0.666", "type":"L"}]}"#;
 
     #[test]
@@ -395,12 +360,11 @@ mod tests {
     }
 
     #[test]
-    fn local_ne_utc(){
+    fn local_ne_utc() {
         let l = Local::now();
         let u = Utc::now();
         println!("local: {} utc: {}", l, u);
         assert_ne!(l.timestamp(), u.timestamp())
-
     }
 
     const single_data: &str = "3:35 AM|0.6|low";
@@ -409,5 +373,4 @@ mod tests {
     // full ts
     const ts_data: &str = "3:35 AM";
     const ts_pm_data: &str = "9:11 PM";
-
 }

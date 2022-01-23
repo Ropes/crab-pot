@@ -28,16 +28,6 @@ extern "C" {
     unsafe fn alert(s: &str);
 }
 
-#[wasm_bindgen]
-pub fn greet(s: &str) {
-    utils::set_panic_hook();
-    let res = parse_noaa_tides(s).unwrap();
-    let tides: String = res.iter().map(|t| t.to_string()).collect();
-    log!("{:?}", tides);
-
-    alert(s);
-}
-
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
