@@ -1,11 +1,11 @@
 use crate::utils::*;
 use crate::DrawResult;
 use chrono::prelude::*;
-use chrono::{DateTime, FixedOffset, TimeZone, Duration, Utc};
 use chrono::Offset;
-use plotters;
+use chrono::{DateTime, Date, Duration, FixedOffset, TimeZone, Utc, Local};
 use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::*;
+use plotters::{self, coord};
 use plotters_canvas::CanvasBackend;
 use serde::{Deserialize, Serialize};
 use simple_error::bail;
@@ -20,6 +20,15 @@ macro_rules! log {
         web_sys::console::log_1(&format!( $( $t )* ).into());
     }
 }
+
+/*
+#[cfg(all(target_family = "unix")]
+macro_rules! log {
+    ( $( $t:tt )* ) => {
+        println!( $( $t )* );
+    }
+}
+*/
 
 // Call the JS alert() callback.
 #[wasm_bindgen]
@@ -57,6 +66,15 @@ pub fn draw(
     let root = backend.into_drawing_area();
     let font: FontDesc = ("sans-serif", 20.0).into();
     root.fill(&WHITE)?;
+    let l = Local::now()
+            .with_hour(0)
+            .unwrap()
+            .with_minute(0)
+            .unwrap()
+            .with_second(0)
+            .unwrap();
+    let neh = l.naive_local();
+    let today = Utc.from_local_datetime( &neh).unwrap();
 
     let mut chart = ChartBuilder::on(&root)
         .margin(20)
@@ -105,7 +123,8 @@ pub fn draw(
         poly_vec.push(z);
     });
 
-    let xys = points_from_vec(tv.to_owned());
+    //let xys = points_from_vec(tv.to_owned());
+    let xys = coordinates_from_prediction(tv.to_owned(), today);
     log!("xys read: {:?}", xys.len());
     chart.draw_series(LineSeries::new(
         xys.iter().filter_map(|(x, y)| {
@@ -136,6 +155,83 @@ pub fn draw(
 
     root.present()?;
     return Ok(chart.into_coord_trans());
+}
+
+fn coordinates_from_prediction(tv: Vec<TidePoint>, today: DateTime<Utc>) -> Vec<(f32, f32)> {
+    let chart_start = today - Duration::hours(12);
+    let chart_end = chart_start + Duration::days(2);
+    log!("start: {} end: {}", chart_start, chart_end);
+
+    // Tide local maximums
+    let mut xs: Vec<f32> = Vec::new();
+    let mut ys: Vec<f32> = Vec::new();
+
+    // Filter down to current day +-12 hours
+    let valid_tp: Vec<&TidePoint> = tv
+        .iter()
+        .filter_map(|x| {
+            if x.dt > chart_start && x.dt < chart_end {
+                return Some(x);
+            }
+            None
+        })
+        .collect();
+
+    valid_tp.iter().for_each(|t| {
+        let (x, y) = t.to_xy();
+        log!("tidepoint[{}]:[{}, {}]", t.dt, x, y);
+        if t.dt < today {
+            let x_adj = x - 24f32 ;
+            xs.push(x_adj);
+            log!("x-adjusted: {}", x_adj);
+        } else if t.dt > today + Duration::hours(24) {
+            let x_adj = 24f32 + x;
+            log!("x-adjusted: {}", x_adj);
+            xs.push(x_adj);
+        } else {
+            xs.push(x);
+        }
+        ys.push(y);
+    });
+
+    // Graphed X,Y vector points
+    let mut tide_x: Vec<f32> = Vec::new();
+    let mut tide_y: Vec<f32> = Vec::new();
+
+    for i in 1..xs.len() {
+        let x_origin = xs[i - 1]; // x0 ...
+        let y_origin = ys[i - 1]; // y0 ...
+        log!("x_origin: {:?} y_origin: {:?}", x_origin, y_origin);
+        tide_x.push(x_origin);
+        tide_y.push(y_origin);
+
+        let y_delta = ys[i] - y_origin;
+        let x_delta = xs[i] - x_origin;
+        log!("x_delta: {:?} y_delta: {:?}", x_delta, y_delta);
+
+        let x_inc = x_delta / 25f32;
+
+        let mut x_step = x_origin + x_inc;
+        while x_step < xs[i] {
+            tide_x.push(x_step);
+            // calculate Y
+            // --------------------------
+            let x_percentage = (x_step - x_origin) / x_delta;
+            let to_cosine = (x_percentage * std::f32::consts::PI) + std::f32::consts::PI;
+            let y_multiplier = (to_cosine.cos() + 1f32) / 2f32;
+            let y_val = (y_multiplier * y_delta) + y_origin;
+            tide_y.push(y_val);
+            //log!("x: {:?}, y: {:?}", x_step, y_val);
+            x_step += x_inc;
+        }
+    }
+
+    let mut ret = Vec::<(f32, f32)>::new();
+    for (_, (x, y)) in tide_x.iter().zip(tide_y.iter()).enumerate() {
+        ret.push((x.clone(), y.clone()));
+    }
+
+    ret
 }
 
 fn points_from_vec(tv: Vec<TidePoint>) -> Vec<(f32, f32)> {
@@ -170,6 +266,7 @@ fn points_from_vec(tv: Vec<TidePoint>) -> Vec<(f32, f32)> {
         log!("tomorrow tide: {:?}", tomorrow_first_tide);
     }
 
+    // Copy tv into new poly_vec
     let mut poly_vec = Vec::<&TidePoint>::new();
     tv.iter().for_each(|t| poly_vec.push(t));
 
@@ -232,8 +329,6 @@ fn points_from_vec(tv: Vec<TidePoint>) -> Vec<(f32, f32)> {
     ret
 }
 
-const predicted_json_data: &str = r#"{ "predictions" : [{"t":"2022-01-10 05:05", "v":"5.086", "type":"L"},{"t":"2022-01-10 11:32", "v":"14.668", "type":"H"},{"t":"2022-01-10 19:03", "v":"2.498", "type":"L"},{"t":"2022-01-11 01:42", "v":"10.228", "type":"H"},{"t":"2022-01-11 06:15", "v":"6.854", "type":"L"},{"t":"2022-01-11 12:11", "v":"14.150", "type":"H"},{"t":"2022-01-11 19:51", "v":"1.503", "type":"L"},{"t":"2022-01-12 03:19", "v":"11.508", "type":"H"},{"t":"2022-01-12 07:45", "v":"8.101", "type":"L"},{"t":"2022-01-12 12:51", "v":"13.639", "type":"H"},{"t":"2022-01-12 20:33", "v":"0.666", "type":"L"}]}"#;
-
 #[derive(Serialize, Deserialize, Debug)]
 struct JsonTide {
     t: String,
@@ -243,11 +338,11 @@ struct JsonTide {
     tide: String,
 }
 
-impl JsonTide{
+impl JsonTide {
     pub fn to_tide_point(&self) -> Result<TidePoint, Box<dyn Error>> {
         let t = chrono::NaiveDateTime::parse_from_str(self.t.as_str(), "%Y-%m-%d %H:%M")?;
         let h = self.v.parse::<f32>()?;
-        let tide = match self.tide.as_str(){
+        let tide = match self.tide.as_str() {
             "H" => Tide::High,
             "L" => Tide::Low,
             _ => Tide::None,
@@ -256,7 +351,7 @@ impl JsonTide{
         let n = Utc::now();
         let dt = DateTime::from_utc(t, *n.offset());
 
-        Ok(TidePoint{
+        Ok(TidePoint {
             dt: dt,
             level: h,
             tide: tide,
@@ -275,8 +370,12 @@ impl Predictions {
     }
 
     pub fn tide_points(&self) -> Vec<TidePoint> {
-        let tidepoints: Vec<TidePoint> = self.predictions.iter().map(|t| t.to_tide_point().unwrap()).collect();
-        
+        let tidepoints: Vec<TidePoint> = self
+            .predictions
+            .iter()
+            .map(|t| t.to_tide_point().unwrap())
+            .collect();
+
         tidepoints
     }
 }
@@ -427,23 +526,52 @@ mod tests {
     const predicted_json_data: &str = r#"{ "predictions" : [{"t":"2022-01-10 05:05", "v":"5.086", "type":"L"},{"t":"2022-01-10 11:32", "v":"14.668", "type":"H"},{"t":"2022-01-10 19:03", "v":"2.498", "type":"L"},{"t":"2022-01-11 01:42", "v":"10.228", "type":"H"},{"t":"2022-01-11 06:15", "v":"6.854", "type":"L"},{"t":"2022-01-11 12:11", "v":"14.150", "type":"H"},{"t":"2022-01-11 19:51", "v":"1.503", "type":"L"},{"t":"2022-01-12 03:19", "v":"11.508", "type":"H"},{"t":"2022-01-12 07:45", "v":"8.101", "type":"L"},{"t":"2022-01-12 12:51", "v":"13.639", "type":"H"},{"t":"2022-01-12 20:33", "v":"0.666", "type":"L"}]}"#;
 
     #[test]
-    fn json_parse(){
+    fn json_parse() {
         let p: Predictions = serde_json::from_str(predicted_json_data).unwrap();
         println!("{:?}", p);
 
-        let tidepoints: Vec<TidePoint> = p.predictions.iter().map(|t| t.to_tide_point().unwrap()).collect();
+        let tidepoints: Vec<TidePoint> = p
+            .predictions
+            .iter()
+            .map(|t| t.to_tide_point().unwrap())
+            .collect();
         tidepoints.iter().for_each(|t| println!("{:?}", t));
+
+        let x = "2022-01-11 19:51";
+        let today = chrono::NaiveDateTime::parse_from_str(x, "%Y-%m-%d %H:%M").unwrap();
+        let n = Utc::from_local_datetime(&Utc, &today)
+            .unwrap()
+            .with_hour(0)
+            .unwrap()
+            .with_minute(0)
+            .unwrap()
+            .with_second(0)
+            .unwrap();
+        //let dt = DateTime::from_utc(today, *n.offset());
+
+        println!("today: {} utc-dt: {}", today, n);
+        let chart_points = coordinates_from_prediction(tidepoints, n);
+        println!("{:?}", chart_points);
     }
 
     #[test]
-    fn noaa_prediction_datetime_parse(){
+    fn noaa_prediction_datetime_parse() {
         let x = "2022-01-11 19:51";
         let t = chrono::NaiveDateTime::parse_from_str(x, "%Y-%m-%d %H:%M");
-        
+
         match t {
             Err(e) => println!("error: {}", e),
             Ok(t) => println!("{:?}", t),
         }
+    }
+
+    #[test]
+    fn local_ne_utc(){
+        let l = Local::now();
+        let u = Utc::now();
+        println!("local: {} utc: {}", l, u);
+        assert_ne!(l.timestamp(), u.timestamp())
+
     }
 
     const single_data: &str = "3:35 AM|0.6|low";

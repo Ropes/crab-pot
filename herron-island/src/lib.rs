@@ -1,10 +1,10 @@
-mod utils;
 mod tides;
+mod utils;
 
-use std::{error::Error};
+use crate::tides::*;
+use std::error::Error;
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
-use crate::tides::*;
 
 extern crate web_sys;
 
@@ -38,7 +38,6 @@ pub fn greet(s: &str) {
     alert(s);
 }
 
-
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
@@ -67,7 +66,7 @@ impl Chart {
         let p: Predictions = serde_json::from_str(raw_tides).unwrap();
         let tv: Vec<TidePoint> = p.tide_points();
         let map_coord = tides::draw(canvas_id, tv).map_err(|err| err.to_string())?;
-        Ok(Chart{
+        Ok(Chart {
             convert: Box::new(move |coord| map_coord(coord).map(|(x, y)| (x.into(), y.into()))),
         })
     }
@@ -78,4 +77,3 @@ impl Chart {
         (self.convert)((x, y)).map(|(x, y)| Point { x, y })
     }
 }
-
