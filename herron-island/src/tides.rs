@@ -66,6 +66,8 @@ pub fn draw(
     let root = backend.into_drawing_area();
     let font: FontDesc = ("sans-serif", 20.0).into();
     root.fill(&WHITE)?;
+
+    // Find the local date, flatten to naive date, then convert it to a UTC date.
     let l = Local::now()
             .with_hour(0)
             .unwrap()
@@ -111,6 +113,18 @@ pub fn draw(
     ))?;
     */
 
+    let xys = coordinates_from_prediction(tv.to_owned(), today);
+    log!("xys read: {:?}", xys.len());
+    chart.draw_series(LineSeries::new(
+        xys.iter().filter_map(|(x, y)| {
+            if *x > 0f32 && *x < 24f32 {
+                return Some((x.clone(), y.clone()));
+            }
+            return None;
+        }),
+        &BLUE,
+    ))?;
+
     chart.draw_series(tv.iter().map(|t| {
         let (x, y) = t.to_xy();
         return Circle::new((x, y), 3, ShapeStyle::from(&RED));
@@ -123,18 +137,6 @@ pub fn draw(
         poly_vec.push(z);
     });
 
-    //let xys = points_from_vec(tv.to_owned());
-    let xys = coordinates_from_prediction(tv.to_owned(), today);
-    log!("xys read: {:?}", xys.len());
-    chart.draw_series(LineSeries::new(
-        xys.iter().filter_map(|(x, y)| {
-            if *x > 0f32 && *x < 24f32 {
-                return Some((x.clone(), y.clone()));
-            }
-            return None;
-        }),
-        &BLUE,
-    ))?;
 
     chart.draw_series(PointSeries::of_element(
         tv.to_owned().iter().map(|t| t.to_xy()),
@@ -234,101 +236,6 @@ fn coordinates_from_prediction(tv: Vec<TidePoint>, today: DateTime<Utc>) -> Vec<
     ret
 }
 
-fn points_from_vec(tv: Vec<TidePoint>) -> Vec<(f32, f32)> {
-    // Interpolate series of points between Tide points
-    // TODO: Approximate the previous days final tide, and first tide of next day
-    let tide_cnt = tv.len();
-    let today_start = tv[0].dt.date().clone().and_hms(0, 0, 0);
-    let tomorrow_start = today_start + Duration::days(1);
-    let first_t = tv[0].dt;
-    let last_t = tv[tide_cnt - 1].dt;
-    let zero_to_first = first_t - today_start;
-    let last_to_24 = tomorrow_start - last_t;
-    let tide_space = zero_to_first + last_to_24;
-
-    unsafe {
-        log!("next tide timing: {:?} for {:?}", tide_space, today_start);
-    }
-
-    let (yesterday_last_tide, tomorrow_first_tide) = match tide_cnt {
-        _ => (
-            TidePoint::new(
-                tv[0].dt - tide_space,
-                tv[tide_cnt - 1].level,
-                tv[tide_cnt - 1].tide,
-            ),
-            TidePoint::new(tv[tide_cnt - 1].dt + tide_space, tv[0].level, tv[0].tide),
-        ),
-    };
-
-    unsafe {
-        log!("yesterday tide: {:?}", yesterday_last_tide);
-        log!("tomorrow tide: {:?}", tomorrow_first_tide);
-    }
-
-    // Copy tv into new poly_vec
-    let mut poly_vec = Vec::<&TidePoint>::new();
-    tv.iter().for_each(|t| poly_vec.push(t));
-
-    let mut xs: Vec<f32> = Vec::new();
-    let mut ys: Vec<f32> = Vec::new();
-    // Insert prev day's tide
-    let (x, y) = yesterday_last_tide.to_xy();
-    xs.push(x - 24.0f32);
-    ys.push(y);
-    poly_vec.iter().for_each(|t| {
-        let (x, y) = t.to_xy();
-        xs.push(x);
-        ys.push(y);
-    });
-    // Push next day's tide
-    let (x, y) = tomorrow_first_tide.to_xy();
-    xs.push(x + 24.0f32);
-    ys.push(y);
-    xs.iter().for_each(|x| log!("x: {:?}", x));
-
-    let mut tide_x: Vec<f32> = Vec::new();
-    let mut tide_y: Vec<f32> = Vec::new();
-
-    for i in 1..xs.len() {
-        let x_origin = xs[i - 1]; // x0 ...
-        let y_origin = ys[i - 1]; // y0 ...
-        log!("x_origin: {:?} y_origin: {:?}", x_origin, y_origin);
-        tide_x.push(x_origin);
-        tide_y.push(y_origin);
-
-        let y_delta = ys[i] - y_origin;
-        let x_delta = xs[i] - x_origin;
-        log!("x_delta: {:?} y_delta: {:?}", x_delta, y_delta);
-
-        let x_inc = x_delta / 25f32;
-
-        let mut x_step = x_origin + x_inc;
-        while x_step < xs[i] {
-            tide_x.push(x_step);
-            // calculate Y
-            // --------------------------
-            let x_percentage = (x_step - x_origin) / x_delta;
-            let to_cosine = (x_percentage * std::f32::consts::PI) + std::f32::consts::PI;
-            let y_multiplier = (to_cosine.cos() + 1f32) / 2f32;
-            let y_val = (y_multiplier * y_delta) + y_origin;
-            tide_y.push(y_val);
-            //log!("x: {:?}, y: {:?}", x_step, y_val);
-            x_step += x_inc;
-        }
-    }
-
-    let mut ret = Vec::<(f32, f32)>::new();
-    for (_, (x, y)) in tide_x.iter().zip(tide_y.iter()).enumerate() {
-        ret.push((x.clone(), y.clone()));
-    }
-
-    // calculate the prev-next day tide X offsets and pre-append to the xs,ys
-    //let poly = lagrange(&tideX, &tideY, 1e-6).unwrap();
-    //poly
-    ret
-}
-
 #[derive(Serialize, Deserialize, Debug)]
 struct JsonTide {
     t: String,
@@ -418,84 +325,6 @@ impl TidePoint {
     }
 }
 
-// Query: https://tidesandcurrents.noaa.gov/cgi-bin/stationtideinfo.cgi?Stationid=9446583
-// Example data: "3:35 AM|0.6|low 10:23 AM|12.3|high 4:06 PM|6.9|low 9:11 PM|11.7|high 9:11 PM|high";
-/*
-3:08 AM|0.5|low
-10:21 AM|15.1|high
-4:57 PM|6.4|low
-9:18 PM|9.9|high
-9:18 PM|high*/
-pub fn parse_noaa_tides(s: &str) -> Result<Vec<TidePoint>, Box<dyn Error>> {
-    let split_strings: Vec<&str> = s.lines().collect();
-
-    split_strings.iter().map(|p| println!("{}", p)).count();
-
-    let tide_parts: Vec<TidePoint> = split_strings
-        .iter()
-        .filter_map(|part| parse_tide_tuple(part).ok())
-        .collect();
-
-    Ok(tide_parts)
-}
-
-pub fn parse_tide_tuple(s: &str) -> Result<TidePoint, Box<dyn Error>> {
-    let parts: Vec<&str> = s.trim().split('|').collect();
-    return match parts.len() {
-        3 => {
-            let dt = Utc::now();
-            let ts = parse_time_string(dt, parts[0]);
-            let level = parts[1].parse::<f32>()?;
-
-            let tide = match parts[2] {
-                "low" => TidePoint::new(ts, level, Tide::Low),
-                "high" => TidePoint::new(ts, level, Tide::High),
-                _ => bail!("tide term invalid; not 'high'||'low'"),
-            };
-            Ok(tide)
-        }
-        _ => {
-            //log!("BAILING ON: {:?}", s);
-            bail!("invalid number of elements parsed from tide tuple")
-        }
-    };
-}
-
-pub fn parse_time_string(today: DateTime<Utc>, s: &str) -> DateTime<Utc> {
-    let ts_parts: Vec<&str> = s.split_whitespace().collect();
-
-    // Parse the Hours, Minutes, and Meridian
-    let h_m: Vec<&str> = ts_parts[0].split(':').collect();
-    let h: u32 = match h_m[0].parse::<u32>().unwrap() {
-        12 => 0,
-        _ => h_m[0].parse::<u32>().unwrap(),
-    };
-    let m: u32 = h_m[1].parse::<u32>().unwrap();
-    let meridian: u32 = match ts_parts[1] {
-        "PM" => 12,
-        _ => 0,
-    };
-    let h_adjusted = h + meridian;
-
-    /*log!(
-        "parse_time{:?}: {:?} parts:{:?} h_adjusted: {:?}",
-        today,
-        s,
-        ts_parts,
-       h_adjusted,
-    );*/
-
-    let dt = today
-        .with_hour(h_adjusted)
-        .unwrap()
-        .with_minute(m)
-        .unwrap()
-        .with_second(0)
-        .unwrap()
-        .with_nanosecond(0)
-        .unwrap();
-    dt
-}
 #[cfg(test)]
 mod tests {
     use crate::tides::*;
@@ -581,70 +410,4 @@ mod tests {
     const ts_data: &str = "3:35 AM";
     const ts_pm_data: &str = "9:11 PM";
 
-    #[test]
-    fn test_parse_ts() {
-        let today = Utc.ymd(2021, 9, 27).and_hms(0, 0, 0);
-        let res = parse_time_string(today, ts_data);
-        assert_eq!(res.to_rfc2822(), "Mon, 27 Sep 2021 03:35:00 +0000");
-    }
-
-    #[test]
-    fn test_parse_ts_pm() {
-        let today = Utc.ymd(2021, 9, 27).and_hms(0, 0, 0);
-        let res = parse_time_string(today, ts_pm_data);
-        assert_eq!(res.to_rfc2822(), "Mon, 27 Sep 2021 21:11:00 +0000");
-    }
-    #[test]
-    fn test_single_parse_ok() {
-        let ret = parse_tide_tuple(single_data);
-        assert!(ret.is_ok());
-        let val = ret.unwrap();
-        assert_eq!(val.level, 0.6);
-        assert_eq!(val.tide, Tide::Low);
-    }
-
-    #[test]
-    fn test_single_tide_ok() {
-        let ret = parse_tide_tuple(tide_single);
-        assert!(ret.is_ok());
-        let val = ret.unwrap();
-        assert_eq!(val.level, 15.1);
-        assert_eq!(val.tide, Tide::High);
-    }
-
-    #[test]
-    fn test_full_parse() {
-        let res = parse_noaa_tides(tide_data);
-        assert!(res.is_ok());
-
-        let tides = res.unwrap();
-        println!("{:?}", tides);
-        //assert_eq!(t.level, 15.1);
-    }
-
-    #[test]
-    fn test_0000_12_case() {
-        let res = parse_noaa_tides(special_12_data);
-        assert!(res.is_ok());
-
-        let tides = res.unwrap();
-        println!("{:?}", tides);
-    }
-    #[test]
-    fn test_weird_12_case() {
-        let res = parse_noaa_tides(weird_12_data);
-        assert!(res.is_ok());
-
-        let tides = res.unwrap();
-        println!("{:?}", tides);
-    }
-
-    #[test]
-    fn test_weird_3_tides_per24hr_case() {
-        let res = parse_noaa_tides(weird_midnight_data);
-        assert!(res.is_ok());
-
-        let tides = res.unwrap();
-        println!("{:?}", tides);
-    }
 }
