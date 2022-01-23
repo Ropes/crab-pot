@@ -1,7 +1,7 @@
 mod utils;
 mod tides;
 
-use std::error::Error;
+use std::{error::Error};
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
 use crate::tides::*;
@@ -64,7 +64,8 @@ impl Chart {
     // Draw Tides on provided canvas element
     // Return Chart struct suitable for Coordinate conversion from (f32, f32)...?
     pub fn tides(canvas_id: &str, raw_tides: &str) -> Result<Chart, JsValue> {
-        let tv = parse_noaa_tides(raw_tides).unwrap();
+        let p: Predictions = serde_json::from_str(raw_tides).unwrap();
+        let tv: Vec<TidePoint> = p.tide_points();
         let map_coord = tides::draw(canvas_id, tv).map_err(|err| err.to_string())?;
         Ok(Chart{
             convert: Box::new(move |coord| map_coord(coord).map(|(x, y)| (x.into(), y.into()))),

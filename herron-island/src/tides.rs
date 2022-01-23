@@ -1,11 +1,13 @@
 use crate::utils::*;
 use crate::DrawResult;
 use chrono::prelude::*;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, FixedOffset, TimeZone, Duration, Utc};
+use chrono::Offset;
 use plotters;
 use plotters::coord::types::RangedCoordf32;
 use plotters::prelude::*;
 use plotters_canvas::CanvasBackend;
+use serde::{Deserialize, Serialize};
 use simple_error::bail;
 use std::error::Error;
 use wasm_bindgen::prelude::*;
@@ -161,8 +163,6 @@ fn points_from_vec(tv: Vec<TidePoint>) -> Vec<(f32, f32)> {
             ),
             TidePoint::new(tv[tide_cnt - 1].dt + tide_space, tv[0].level, tv[0].tide),
         ),
-        3 => { // The odd/rare case where there are only three tides in a 24hour span
-        }
     };
 
     unsafe {
@@ -232,10 +232,60 @@ fn points_from_vec(tv: Vec<TidePoint>) -> Vec<(f32, f32)> {
     ret
 }
 
+const predicted_json_data: &str = r#"{ "predictions" : [{"t":"2022-01-10 05:05", "v":"5.086", "type":"L"},{"t":"2022-01-10 11:32", "v":"14.668", "type":"H"},{"t":"2022-01-10 19:03", "v":"2.498", "type":"L"},{"t":"2022-01-11 01:42", "v":"10.228", "type":"H"},{"t":"2022-01-11 06:15", "v":"6.854", "type":"L"},{"t":"2022-01-11 12:11", "v":"14.150", "type":"H"},{"t":"2022-01-11 19:51", "v":"1.503", "type":"L"},{"t":"2022-01-12 03:19", "v":"11.508", "type":"H"},{"t":"2022-01-12 07:45", "v":"8.101", "type":"L"},{"t":"2022-01-12 12:51", "v":"13.639", "type":"H"},{"t":"2022-01-12 20:33", "v":"0.666", "type":"L"}]}"#;
+
+#[derive(Serialize, Deserialize, Debug)]
+struct JsonTide {
+    t: String,
+    v: String,
+
+    #[serde(rename = "type")]
+    tide: String,
+}
+
+impl JsonTide{
+    pub fn to_tide_point(&self) -> Result<TidePoint, Box<dyn Error>> {
+        let t = chrono::NaiveDateTime::parse_from_str(self.t.as_str(), "%Y-%m-%d %H:%M")?;
+        let h = self.v.parse::<f32>()?;
+        let tide = match self.tide.as_str(){
+            "H" => Tide::High,
+            "L" => Tide::Low,
+            _ => Tide::None,
+        };
+
+        let n = Utc::now();
+        let dt = DateTime::from_utc(t, *n.offset());
+
+        Ok(TidePoint{
+            dt: dt,
+            level: h,
+            tide: tide,
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Predictions {
+    predictions: Vec<JsonTide>,
+}
+
+impl Predictions {
+    pub fn to_string(&self) -> String {
+        format!("{:?}", self)
+    }
+
+    pub fn tide_points(&self) -> Vec<TidePoint> {
+        let tidepoints: Vec<TidePoint> = self.predictions.iter().map(|t| t.to_tide_point().unwrap()).collect();
+        
+        tidepoints
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Tide {
     High,
     Low,
+    None,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -289,8 +339,6 @@ pub fn parse_noaa_tides(s: &str) -> Result<Vec<TidePoint>, Box<dyn Error>> {
 
     Ok(tide_parts)
 }
-
-//pub fn unwrap_noaa_tides(s: &str) -> &str {}
 
 pub fn parse_tide_tuple(s: &str) -> Result<TidePoint, Box<dyn Error>> {
     let parts: Vec<&str> = s.trim().split('|').collect();
@@ -376,6 +424,28 @@ mod tests {
 4:42 PM|14.5|high 
 12:10 AM|low|NL"#;
 
+    const predicted_json_data: &str = r#"{ "predictions" : [{"t":"2022-01-10 05:05", "v":"5.086", "type":"L"},{"t":"2022-01-10 11:32", "v":"14.668", "type":"H"},{"t":"2022-01-10 19:03", "v":"2.498", "type":"L"},{"t":"2022-01-11 01:42", "v":"10.228", "type":"H"},{"t":"2022-01-11 06:15", "v":"6.854", "type":"L"},{"t":"2022-01-11 12:11", "v":"14.150", "type":"H"},{"t":"2022-01-11 19:51", "v":"1.503", "type":"L"},{"t":"2022-01-12 03:19", "v":"11.508", "type":"H"},{"t":"2022-01-12 07:45", "v":"8.101", "type":"L"},{"t":"2022-01-12 12:51", "v":"13.639", "type":"H"},{"t":"2022-01-12 20:33", "v":"0.666", "type":"L"}]}"#;
+
+    #[test]
+    fn json_parse(){
+        let p: Predictions = serde_json::from_str(predicted_json_data).unwrap();
+        println!("{:?}", p);
+
+        let tidepoints: Vec<TidePoint> = p.predictions.iter().map(|t| t.to_tide_point().unwrap()).collect();
+        tidepoints.iter().for_each(|t| println!("{:?}", t));
+    }
+
+    #[test]
+    fn noaa_prediction_datetime_parse(){
+        let x = "2022-01-11 19:51";
+        let t = chrono::NaiveDateTime::parse_from_str(x, "%Y-%m-%d %H:%M");
+        
+        match t {
+            Err(e) => println!("error: {}", e),
+            Ok(t) => println!("{:?}", t),
+        }
+    }
+
     const single_data: &str = "3:35 AM|0.6|low";
     const tide_single: &str = "10:21 AM|15.1|high ";
 
@@ -450,9 +520,3 @@ mod tests {
         println!("{:?}", tides);
     }
 }
-
-/*
-fn parse_noaa_cgi(s: &str) -> Vec<Tide> {
-    let data_tuples = *s.split_whitespace().collect().map().collect();
-}
-*/
