@@ -64,7 +64,7 @@ pub fn draw(
 
     let mut chart = ChartBuilder::on(&root)
         .margin(20)
-        .caption(format!("Tides on McMicken Island"), font)
+        .caption(format!("Tide Levels"), font)
         .x_label_area_size(30)
         .y_label_area_size(30)
         .build_cartesian_2d(0f32..24f32, -8f32..20f32)?;
@@ -121,7 +121,7 @@ pub fn draw(
 
     chart.draw_series(valid_tp.iter().map(|t| {
         let (x, y) = t.to_xy();
-        return Circle::new((x, y), 3, ShapeStyle::from(&RED));
+        return Circle::new((x, y), 4, ShapeStyle::from(&BLACK));
     }))?;
     log_wasm!("circles drawn: tv: {:?}", tv.len());
 
@@ -133,8 +133,8 @@ pub fn draw(
 
     chart.draw_series(PointSeries::of_element(
         valid_tp.to_owned().iter().map(|t| t.to_xy()),
-        5,
-        ShapeStyle::from(&RED).filled(),
+        3,
+        ShapeStyle::from(&CYAN).filled(),
         &|coord, size, style| {
             let hour = coord.0 as i32;
             let minutes = ((coord.0.as_f64() - hour.as_f64()) * 60f64).round();
@@ -366,11 +366,4 @@ mod tests {
         println!("local: {} utc: {}", l, u);
         assert_ne!(l.timestamp(), u.timestamp())
     }
-
-    const single_data: &str = "3:35 AM|0.6|low";
-    const tide_single: &str = "10:21 AM|15.1|high ";
-
-    // full ts
-    const ts_data: &str = "3:35 AM";
-    const ts_pm_data: &str = "9:11 PM";
 }
