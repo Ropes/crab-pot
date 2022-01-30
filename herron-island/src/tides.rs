@@ -1,16 +1,18 @@
 use crate::utils::*;
 use crate::DrawResult;
 use chrono::prelude::*;
-use chrono::Offset;
-use chrono::{Date, DateTime, Duration, FixedOffset, Local, TimeZone, Utc};
-use plotters::coord::types::RangedCoordf32;
+use chrono::{DateTime, Duration, Local, TimeZone, Utc};
 use plotters::prelude::*;
-use plotters::{self, coord};
+use plotters::{self};
+use plotters::element::*;
 use plotters_canvas::CanvasBackend;
 use serde::{Deserialize, Serialize};
-use simple_error::bail;
 use std::error::Error;
 use wasm_bindgen::prelude::*;
+//use image::{imageops::FilterType, ImageFormat};
+
+use std::fs::File;
+use std::io::BufReader;
 
 extern crate web_sys;
 
@@ -52,7 +54,8 @@ pub fn draw(
     root.fill(&WHITE)?;
 
     // Find the local date, flatten to naive date, then convert it to a UTC date.
-    let l = Local::now()
+    let now = Local::now();
+    let l = now
         .with_hour(0)
         .unwrap()
         .with_minute(0)
@@ -61,13 +64,16 @@ pub fn draw(
         .unwrap();
     let neh = l.naive_local();
     let today = Utc.from_local_datetime(&neh).unwrap();
+    log_wasm!("Local: {:?} Naive:{:?}", now, neh);
 
+    let chart_top = 20f32;
+    let chart_bottom = -8f32;
     let mut chart = ChartBuilder::on(&root)
         .margin(20)
         .caption(format!("Tide Levels"), font)
         .x_label_area_size(30)
         .y_label_area_size(30)
-        .build_cartesian_2d(0f32..24f32, -8f32..20f32)?;
+        .build_cartesian_2d(0f32..24f32, chart_bottom..chart_top)?;
 
     chart
         .configure_mesh()
@@ -76,26 +82,6 @@ pub fn draw(
         .y_labels(5)
         .y_desc("Sea Level")
         .draw()?;
-
-    // Dot and label each high/low tide from TidePoint
-    /*
-    let dot_and_label = |x: f32, y: f32| {
-        return EmptyElement::at((x, y))
-            + Circle::new((0, 0), 3, ShapeStyle::from(&BLACK).filled())
-            + Text::new(
-                format!("({:.2},{:.2})", x, y),
-                (10, 0),
-                ("sans-serif", 15.0).into_font(),
-            );
-    };
-    chart.draw_series(LineSeries::new(
-        tv.iter().map(|t| {
-            let (x, y) = t.to_xy();
-            (x, y)
-        }),
-        &BLACK,
-    ))?;
-    */
 
     let xys = coordinates_from_prediction(tv.to_owned(), today);
     log_wasm!("xys read: {:?}", xys.len());
@@ -108,6 +94,37 @@ pub fn draw(
         }),
         &BLUE,
     ))?;
+
+    // Draw vertical line to show current time
+    let x_val = now.hour() as f32 + (now.minute() as f32 / 60f32);
+    let x_split = 0.1f32;
+    let y_val = xys
+        .iter()
+        .find_map(|(x, y)| if x > &x_val { Some(x) } else { None }).unwrap();
+    let mut xs: Vec<f32> = Vec::new();
+    xs.push(x_val);
+
+    chart.draw_series(xs.iter().map(|x| {
+        Rectangle::new(
+            [(x - &x_split, chart_bottom), (x + &x_split, *y_val)],
+            HSLColor(255.0, 0.7, 0.7).filled(),
+        )
+    }))?;
+
+    // Draw the Charlie Wells
+    /* Seems not possible with Plotters 3.x, may have worked in 2.x
+    let (w, h) = chart.plotting_area().dim_in_pixel();
+    let image = image::load(
+        BufReader::new(
+            File::open("www/charlie-wells.svg").map_err(|e| {
+                eprintln!("Unable to open file charlie-wells.svg");
+                e
+            })?),
+        ImageFormat::Png,
+    )?
+    .resize_exact(w - w / 10, h - h / 10, FilterType::Nearest);
+    */
+
 
     let valid_tp: Vec<&TidePoint> = tv
         .iter()
