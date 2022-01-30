@@ -100,7 +100,7 @@ pub fn draw(
     let x_split = 0.1f32;
     let y_val = xys
         .iter()
-        .find_map(|(x, y)| if x > &x_val { Some(x) } else { None }).unwrap();
+        .find_map(|(x, y)| if x > &x_val { Some(y) } else { None }).unwrap();
     let mut xs: Vec<f32> = Vec::new();
     xs.push(x_val);
 
