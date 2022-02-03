@@ -174,7 +174,7 @@ pub fn draw(
             return EmptyElement::at(coord)
                 + Circle::new((0, 0), size, style)
                 + Text::new(
-                    format!("[{}:{}] {:?}", hour, minutes, coord.1),
+                    format!("[{:02}:{:02}] {:?}", hour, minutes, coord.1),
                     (-40, 15),
                     &point_style,
                 );
