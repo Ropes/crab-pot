@@ -2,7 +2,7 @@ use crate::utils::*;
 use crate::DrawResult;
 use chrono::prelude::*;
 use chrono::{DateTime, Duration, Local, TimeZone, Utc};
-use plotters::prelude::*;
+use plotters::{prelude::*, style::RGBAColor};
 use plotters::{self};
 use plotters::element::*;
 use plotters_canvas::CanvasBackend;
@@ -50,8 +50,8 @@ pub fn draw(
 ) -> DrawResult<impl Fn((i32, i32)) -> Option<(f32, f32)>> {
     let backend = CanvasBackend::new(canvas_id).expect("cannot find canvas");
     let root = backend.into_drawing_area();
-    let font: FontDesc = ("sans-serif", 20.0).into();
-    root.fill(&WHITE)?;
+    let label_style = TextStyle::from(("sans-serif", 10).into_font()).color(&WHITE);
+    root.fill(&RGBColor(54, 95, 145))?;
 
     // Find the local date, flatten to naive date, then convert it to a UTC date.
     let now = Local::now();
@@ -69,22 +69,36 @@ pub fn draw(
     let chart_top = 20f32;
     let chart_bottom = -8f32;
     let mut chart = ChartBuilder::on(&root)
-        .margin(20)
-        .caption(format!("Tide Levels"), font)
-        .x_label_area_size(30)
-        .y_label_area_size(30)
+        .margin(10)
+        //.caption(format!("Sea Level"), font)
+        .x_label_area_size(40)
+        .y_label_area_size(40)
         .build_cartesian_2d(0f32..24f32, chart_bottom..chart_top)?;
 
     chart
         .configure_mesh()
-        .x_labels(6)
-        .x_desc("24hr time")
-        .y_labels(5)
+        .x_labels(5)
+        .x_label_style(&WHITE)
+        .x_desc("24 hour time")
+        .y_labels(10)
+        .y_label_style(label_style)
         .y_desc("Sea Level")
         .draw()?;
 
+
     let xys = coordinates_from_prediction(tv.to_owned(), today);
     log_wasm!("xys read: {:?}", xys.len());
+    chart.draw_series(AreaSeries::new(
+        xys.iter().filter_map(|(x, y)| {
+            if *x > 0f32 && *x < 24f32 {
+                return Some((x.clone(), y.clone()));
+            }
+            return None;
+        }),
+        -10.0,
+        &BLUE.mix(0.5),
+    ))?;
+    /*
     chart.draw_series(LineSeries::new(
         xys.iter().filter_map(|(x, y)| {
             if *x > 0f32 && *x < 24f32 {
@@ -94,6 +108,7 @@ pub fn draw(
         }),
         &BLUE,
     ))?;
+    */
 
     // Draw vertical line to show current time
     let x_val = now.hour() as f32 + (now.minute() as f32 / 60f32);
@@ -107,7 +122,7 @@ pub fn draw(
     chart.draw_series(xs.iter().map(|x| {
         Rectangle::new(
             [(x - &x_split, chart_bottom), (x + &x_split, *y_val)],
-            HSLColor(255.0, 0.7, 0.7).filled(),
+            HSLColor(127.0, 255.0, 127.0).filled(),
         )
     }))?;
 
@@ -138,7 +153,7 @@ pub fn draw(
 
     chart.draw_series(valid_tp.iter().map(|t| {
         let (x, y) = t.to_xy();
-        return Circle::new((x, y), 4, ShapeStyle::from(&BLACK));
+        return Circle::new((x, y), 4, ShapeStyle::from(&WHITE));
     }))?;
     log_wasm!("circles drawn: tv: {:?}", tv.len());
 
@@ -148,6 +163,7 @@ pub fn draw(
         poly_vec.push(z);
     });
 
+    let point_style = TextStyle::from(("sans-serif", 15).into_font()).color(&WHITE);
     chart.draw_series(PointSeries::of_element(
         valid_tp.to_owned().iter().map(|t| t.to_xy()),
         3,
@@ -160,7 +176,7 @@ pub fn draw(
                 + Text::new(
                     format!("[{}:{}] {:?}", hour, minutes, coord.1),
                     (-40, 15),
-                    ("sans-serif", 15),
+                    &point_style,
                 );
         },
     ))?;
