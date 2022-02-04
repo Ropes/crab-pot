@@ -79,7 +79,7 @@ pub fn draw(
         .configure_mesh()
         .x_labels(5)
         .x_label_style(&WHITE)
-        .x_desc("24 hour time")
+        .x_desc(format!("{}", today.format("%Y-%m-%d Tides")))
         .y_labels(10)
         .y_label_style(label_style)
         .y_desc("Sea Level")
