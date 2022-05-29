@@ -2,9 +2,9 @@ use crate::utils::*;
 use crate::DrawResult;
 use chrono::prelude::*;
 use chrono::{DateTime, Duration, Local, TimeZone, Utc};
-use plotters::{prelude::*, style::RGBAColor};
-use plotters::{self};
 use plotters::element::*;
+use plotters::{self};
+use plotters::{prelude::*, style::RGBAColor};
 use plotters_canvas::CanvasBackend;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
@@ -85,7 +85,6 @@ pub fn draw(
         .y_desc("Sea Level")
         .draw()?;
 
-
     let xys = coordinates_from_prediction(tv.to_owned(), today);
     log_wasm!("xys read: {:?}", xys.len());
     chart.draw_series(AreaSeries::new(
@@ -112,10 +111,11 @@ pub fn draw(
 
     // Draw vertical line to show current time
     let x_val = now.hour() as f32 + (now.minute() as f32 / 60f32);
-    let x_split = 0.1f32;
+    let x_split = 0.05f32;
     let y_val = xys
         .iter()
-        .find_map(|(x, y)| if x > &x_val { Some(y) } else { None }).unwrap();
+        .find_map(|(x, y)| if x > &x_val { Some(y) } else { None })
+        .unwrap();
     let mut xs: Vec<f32> = Vec::new();
     xs.push(x_val);
 
@@ -140,6 +140,82 @@ pub fn draw(
     .resize_exact(w - w / 10, h - h / 10, FilterType::Nearest);
     */
 
+    // Draw Charlie Wells manually
+    let oy = *y_val;
+    let ch_scale = 0.3f32;
+
+    let mut xs: Vec<f32> = Vec::new();
+    xs.push(x_val);
+
+    // Draw cabin
+    chart.draw_series(xs.iter().map(|x| {
+        let ox: f32 = *x;
+        let cabin_width = 1.0f32;
+        Rectangle::new(
+            [
+                (ox - (&cabin_width) * ch_scale, oy - (1.0f32) * ch_scale),
+                (ox + (&cabin_width) * ch_scale, oy + (1.0f32) * ch_scale),
+            ],
+            RGBColor(255, 255, 255).filled(),
+        )
+    }))?;
+
+    // Draw Deck(Red...)
+    chart.draw_series(xs.iter().map(|x| {
+        let ox: f32 = *x;
+        let deck_width = 1.50f32;
+        Rectangle::new(
+            [
+                (ox - (&deck_width) * ch_scale, oy - (1.0f32) * ch_scale),
+                (ox + (&deck_width) * ch_scale, oy),
+            ],
+            RGBColor(255, 16, 16).filled(),
+        )
+    }))?;
+
+    // Draw Hull
+    chart.draw_series(xs.iter().map(|x| {
+        let ox: f32 = *x;
+        let hull_width = 1.75f32;
+        Polygon::new(
+            [
+                (ox - (&hull_width) * ch_scale, oy - (1.0f32) * ch_scale),
+                (
+                    ox - ((&hull_width - 0.25f32) * ch_scale),
+                    oy - (1.5f32 * ch_scale),
+                ),
+                (
+                    ox + ((&hull_width - 0.25f32) * ch_scale),
+                    oy - (1.5f32 * ch_scale),
+                ),
+                (ox + ((&hull_width) * ch_scale), oy - ((1.0f32) * ch_scale)),
+            ],
+            RGBColor(128, 0, 0).filled(),
+        )
+    }))?;
+
+    // Draw Bridge
+    chart.draw_series(xs.iter().map(|x| {
+        let ox: f32 = *x;
+        let bridge_width = 0.25f32;
+        Polygon::new(
+            [
+                (ox - (&bridge_width * ch_scale), oy + (1.0f32 * ch_scale)),
+                (ox + (&bridge_width * ch_scale), oy + (1.0f32 * ch_scale)),
+                (ox + (&bridge_width * ch_scale), oy + (1.5f32 * ch_scale)),
+                (
+                    ox + ((&bridge_width + 0.125f32) * ch_scale),
+                    oy + (2.0f32 * ch_scale),
+                ),
+                (
+                    ox - ((&bridge_width + 0.125f32) * ch_scale),
+                    oy + (2.0f32 * ch_scale),
+                ),
+                (ox - (&bridge_width) * ch_scale, oy + (1.5f32 * ch_scale)),
+            ],
+            HSLColor(255.0, 255.0, 255.0).filled(),
+        )
+    }))?;
 
     let valid_tp: Vec<&TidePoint> = tv
         .iter()
@@ -351,6 +427,9 @@ mod tests {
     use chrono::{DateTime, TimeZone, Utc};
 
     const predicted_json_data: &str = r#"{ "predictions" : [{"t":"2022-01-10 05:05", "v":"5.086", "type":"L"},{"t":"2022-01-10 11:32", "v":"14.668", "type":"H"},{"t":"2022-01-10 19:03", "v":"2.498", "type":"L"},{"t":"2022-01-11 01:42", "v":"10.228", "type":"H"},{"t":"2022-01-11 06:15", "v":"6.854", "type":"L"},{"t":"2022-01-11 12:11", "v":"14.150", "type":"H"},{"t":"2022-01-11 19:51", "v":"1.503", "type":"L"},{"t":"2022-01-12 03:19", "v":"11.508", "type":"H"},{"t":"2022-01-12 07:45", "v":"8.101", "type":"L"},{"t":"2022-01-12 12:51", "v":"13.639", "type":"H"},{"t":"2022-01-12 20:33", "v":"0.666", "type":"L"}]}"#;
+
+    const prediction: &str = r#"{ "predictions" : [{"t":"2022-05-27 03:49", "v":"14.036", "type":"H"},{"t":"2022-05-27 11:02", "v":"-0.058", "type":"L"},{"t":"2022-05-27 17:51", "v":"12.111", "type":"H"},{"t":"2022-05-27 23:02", "v":"5.967", "type":"L"},{"t":"2022-05-28 04:17", "v":"13.733", "type":"H"},{"t":"2022-05-28 11:32", "v":"-0.922", "type":"L"},{"t":"2022-05-28 18:42", "v":"12.991", "type":"H"},{"t":"2022-05-28 23:53", "v":"6.817", "type":"L"},{"t":"2022-05-29 04:44", "v":"13.355", "type":"H"},{"t":"2022-05-29 12:01", "v":"-1.516", "type":"L"},{"t":"2022-05-29 19:25", "v":"13.647", "type":"H"}
+    ]}"#;
 
     #[test]
     fn json_parse() {

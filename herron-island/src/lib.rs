@@ -2,9 +2,9 @@ mod tides;
 mod utils;
 
 use crate::tides::*;
-use std::error::Error;
+//use std::error::Error;
 use wasm_bindgen::prelude::*;
-use web_sys::HtmlCanvasElement;
+//use web_sys::HtmlCanvasElement;
 
 extern crate web_sys;
 
