@@ -47,6 +47,7 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 pub fn draw(
     canvas_id: &str,
     tv: Vec<TidePoint>,
+    draw_cw: bool,
 ) -> DrawResult<impl Fn((i32, i32)) -> Option<(f32, f32)>> {
     let backend = CanvasBackend::new(canvas_id).expect("cannot find canvas");
     let root = backend.into_drawing_area();
@@ -140,82 +141,84 @@ pub fn draw(
     .resize_exact(w - w / 10, h - h / 10, FilterType::Nearest);
     */
 
-    // Draw Charlie Wells manually
-    let oy = *y_val;
-    let ch_scale = 0.3f32;
+    if draw_cw {
+        // Draw Charlie Wells manually
+        let oy = *y_val;
+        let ch_scale = 0.3f32;
 
-    let mut xs: Vec<f32> = Vec::new();
-    xs.push(x_val);
+        let mut xs: Vec<f32> = Vec::new();
+        xs.push(x_val);
 
-    // Draw cabin
-    chart.draw_series(xs.iter().map(|x| {
-        let ox: f32 = *x;
-        let cabin_width = 1.0f32;
-        Rectangle::new(
-            [
-                (ox - (&cabin_width) * ch_scale, oy - (1.0f32) * ch_scale),
-                (ox + (&cabin_width) * ch_scale, oy + (1.0f32) * ch_scale),
-            ],
-            RGBColor(255, 255, 255).filled(),
-        )
-    }))?;
+        // Draw cabin
+        chart.draw_series(xs.iter().map(|x| {
+            let ox: f32 = *x;
+            let cabin_width = 1.0f32;
+            Rectangle::new(
+                [
+                    (ox - (&cabin_width) * ch_scale, oy - (1.0f32) * ch_scale),
+                    (ox + (&cabin_width) * ch_scale, oy + (1.0f32) * ch_scale),
+                ],
+                RGBColor(255, 255, 255).filled(),
+            )
+        }))?;
 
-    // Draw Deck(Red...)
-    chart.draw_series(xs.iter().map(|x| {
-        let ox: f32 = *x;
-        let deck_width = 1.50f32;
-        Rectangle::new(
-            [
-                (ox - (&deck_width) * ch_scale, oy - (1.0f32) * ch_scale),
-                (ox + (&deck_width) * ch_scale, oy),
-            ],
-            RGBColor(255, 16, 16).filled(),
-        )
-    }))?;
+        // Draw Deck(Red...)
+        chart.draw_series(xs.iter().map(|x| {
+            let ox: f32 = *x;
+            let deck_width = 1.50f32;
+            Rectangle::new(
+                [
+                    (ox - (&deck_width) * ch_scale, oy - (1.0f32) * ch_scale),
+                    (ox + (&deck_width) * ch_scale, oy),
+                ],
+                RGBColor(255, 16, 16).filled(),
+            )
+        }))?;
 
-    // Draw Hull
-    chart.draw_series(xs.iter().map(|x| {
-        let ox: f32 = *x;
-        let hull_width = 1.75f32;
-        Polygon::new(
-            [
-                (ox - (&hull_width) * ch_scale, oy - (1.0f32) * ch_scale),
-                (
-                    ox - ((&hull_width - 0.25f32) * ch_scale),
-                    oy - (1.5f32 * ch_scale),
-                ),
-                (
-                    ox + ((&hull_width - 0.25f32) * ch_scale),
-                    oy - (1.5f32 * ch_scale),
-                ),
-                (ox + ((&hull_width) * ch_scale), oy - ((1.0f32) * ch_scale)),
-            ],
-            RGBColor(128, 0, 0).filled(),
-        )
-    }))?;
+        // Draw Hull
+        chart.draw_series(xs.iter().map(|x| {
+            let ox: f32 = *x;
+            let hull_width = 1.75f32;
+            Polygon::new(
+                [
+                    (ox - (&hull_width) * ch_scale, oy - (1.0f32) * ch_scale),
+                    (
+                        ox - ((&hull_width - 0.25f32) * ch_scale),
+                        oy - (1.5f32 * ch_scale),
+                    ),
+                    (
+                        ox + ((&hull_width - 0.25f32) * ch_scale),
+                        oy - (1.5f32 * ch_scale),
+                    ),
+                    (ox + ((&hull_width) * ch_scale), oy - ((1.0f32) * ch_scale)),
+                ],
+                RGBColor(128, 0, 0).filled(),
+            )
+        }))?;
 
-    // Draw Bridge
-    chart.draw_series(xs.iter().map(|x| {
-        let ox: f32 = *x;
-        let bridge_width = 0.25f32;
-        Polygon::new(
-            [
-                (ox - (&bridge_width * ch_scale), oy + (1.0f32 * ch_scale)),
-                (ox + (&bridge_width * ch_scale), oy + (1.0f32 * ch_scale)),
-                (ox + (&bridge_width * ch_scale), oy + (1.5f32 * ch_scale)),
-                (
-                    ox + ((&bridge_width + 0.125f32) * ch_scale),
-                    oy + (2.0f32 * ch_scale),
-                ),
-                (
-                    ox - ((&bridge_width + 0.125f32) * ch_scale),
-                    oy + (2.0f32 * ch_scale),
-                ),
-                (ox - (&bridge_width) * ch_scale, oy + (1.5f32 * ch_scale)),
-            ],
-            HSLColor(255.0, 255.0, 255.0).filled(),
-        )
-    }))?;
+        // Draw Bridge
+        chart.draw_series(xs.iter().map(|x| {
+            let ox: f32 = *x;
+            let bridge_width = 0.25f32;
+            Polygon::new(
+                [
+                    (ox - (&bridge_width * ch_scale), oy + (1.0f32 * ch_scale)),
+                    (ox + (&bridge_width * ch_scale), oy + (1.0f32 * ch_scale)),
+                    (ox + (&bridge_width * ch_scale), oy + (1.5f32 * ch_scale)),
+                    (
+                        ox + ((&bridge_width + 0.125f32) * ch_scale),
+                        oy + (2.0f32 * ch_scale),
+                    ),
+                    (
+                        ox - ((&bridge_width + 0.125f32) * ch_scale),
+                        oy + (2.0f32 * ch_scale),
+                    ),
+                    (ox - (&bridge_width) * ch_scale, oy + (1.5f32 * ch_scale)),
+                ],
+                HSLColor(255.0, 255.0, 255.0).filled(),
+            )
+        }))?;
+    }
 
     let valid_tp: Vec<&TidePoint> = tv
         .iter()
