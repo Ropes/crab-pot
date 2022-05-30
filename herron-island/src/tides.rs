@@ -96,7 +96,7 @@ pub fn draw(
             return None;
         }),
         -10.0,
-        &BLUE.mix(0.5),
+        RGBColor(139, 166, 214).mix(0.5),
     ))?;
     /*
     chart.draw_series(LineSeries::new(
@@ -123,103 +123,12 @@ pub fn draw(
     chart.draw_series(xs.iter().map(|x| {
         Rectangle::new(
             [(x - &x_split, chart_bottom), (x + &x_split, *y_val)],
-            HSLColor(127.0, 255.0, 127.0).filled(),
+            //RGBColor(127, 255, 127).filled(),
+            RGBColor(54, 200, 95).filled(),
         )
     }))?;
 
-    // Draw the Charlie Wells
-    /* Seems not possible with Plotters 3.x, may have worked in 2.x
-    let (w, h) = chart.plotting_area().dim_in_pixel();
-    let image = image::load(
-        BufReader::new(
-            File::open("www/charlie-wells.svg").map_err(|e| {
-                eprintln!("Unable to open file charlie-wells.svg");
-                e
-            })?),
-        ImageFormat::Png,
-    )?
-    .resize_exact(w - w / 10, h - h / 10, FilterType::Nearest);
-    */
-
-    if draw_cw {
-        // Draw Charlie Wells manually
-        let oy = *y_val;
-        let ch_scale = 0.3f32;
-
-        let mut xs: Vec<f32> = Vec::new();
-        xs.push(x_val);
-
-        // Draw cabin
-        chart.draw_series(xs.iter().map(|x| {
-            let ox: f32 = *x;
-            let cabin_width = 1.0f32;
-            Rectangle::new(
-                [
-                    (ox - (&cabin_width) * ch_scale, oy - (1.0f32) * ch_scale),
-                    (ox + (&cabin_width) * ch_scale, oy + (1.0f32) * ch_scale),
-                ],
-                RGBColor(255, 255, 255).filled(),
-            )
-        }))?;
-
-        // Draw Deck(Red...)
-        chart.draw_series(xs.iter().map(|x| {
-            let ox: f32 = *x;
-            let deck_width = 1.50f32;
-            Rectangle::new(
-                [
-                    (ox - (&deck_width) * ch_scale, oy - (1.0f32) * ch_scale),
-                    (ox + (&deck_width) * ch_scale, oy),
-                ],
-                RGBColor(255, 16, 16).filled(),
-            )
-        }))?;
-
-        // Draw Hull
-        chart.draw_series(xs.iter().map(|x| {
-            let ox: f32 = *x;
-            let hull_width = 1.75f32;
-            Polygon::new(
-                [
-                    (ox - (&hull_width) * ch_scale, oy - (1.0f32) * ch_scale),
-                    (
-                        ox - ((&hull_width - 0.25f32) * ch_scale),
-                        oy - (1.5f32 * ch_scale),
-                    ),
-                    (
-                        ox + ((&hull_width - 0.25f32) * ch_scale),
-                        oy - (1.5f32 * ch_scale),
-                    ),
-                    (ox + ((&hull_width) * ch_scale), oy - ((1.0f32) * ch_scale)),
-                ],
-                RGBColor(128, 0, 0).filled(),
-            )
-        }))?;
-
-        // Draw Bridge
-        chart.draw_series(xs.iter().map(|x| {
-            let ox: f32 = *x;
-            let bridge_width = 0.25f32;
-            Polygon::new(
-                [
-                    (ox - (&bridge_width * ch_scale), oy + (1.0f32 * ch_scale)),
-                    (ox + (&bridge_width * ch_scale), oy + (1.0f32 * ch_scale)),
-                    (ox + (&bridge_width * ch_scale), oy + (1.5f32 * ch_scale)),
-                    (
-                        ox + ((&bridge_width + 0.125f32) * ch_scale),
-                        oy + (2.0f32 * ch_scale),
-                    ),
-                    (
-                        ox - ((&bridge_width + 0.125f32) * ch_scale),
-                        oy + (2.0f32 * ch_scale),
-                    ),
-                    (ox - (&bridge_width) * ch_scale, oy + (1.5f32 * ch_scale)),
-                ],
-                HSLColor(255.0, 255.0, 255.0).filled(),
-            )
-        }))?;
-    }
-
+    // Draw visual points to indicate when and tide level
     let valid_tp: Vec<&TidePoint> = tv
         .iter()
         .filter_map(|x| {
@@ -253,12 +162,200 @@ pub fn draw(
             return EmptyElement::at(coord)
                 + Circle::new((0, 0), size, style)
                 + Text::new(
-                    format!("[{:02}:{:02}] {:?}", hour, minutes, coord.1),
+                    format!("[{:02}:{:02}] {:.1}", hour, minutes, coord.1),
                     (-40, 15),
                     &point_style,
                 );
         },
     ))?;
+
+    // Draw the Charlie Wells
+    /* Seems not possible with Plotters 3.x, may have worked in 2.x
+    let (w, h) = chart.plotting_area().dim_in_pixel();
+    let image = image::load(
+        BufReader::new(
+            File::open("www/charlie-wells.svg").map_err(|e| {
+                eprintln!("Unable to open file charlie-wells.svg");
+                e
+            })?),
+        ImageFormat::Png,
+    )?
+    .resize_exact(w - w / 10, h - h / 10, FilterType::Nearest);
+    */
+
+    // Draw Charlie Wells manually
+    if draw_cw {
+        //let ch_scale = 0.3f32;
+        let ch_scale = 0.5f32;
+        let oy = *y_val+(1.75f32*ch_scale);
+
+        let mut xs: Vec<f32> = Vec::new();
+        xs.push(x_val);
+
+        // Draw cabin(white)
+        chart.draw_series(xs.iter().map(|x| {
+            let ox: f32 = *x;
+            let cabin_width = 0.8f32;
+            Rectangle::new(
+                [
+                    (ox - (&cabin_width) * ch_scale, oy - (1.0f32) * ch_scale),
+                    (ox + (&cabin_width) * ch_scale, oy + (1.0f32) * ch_scale),
+                ],
+                RGBColor(255, 255, 255).filled(),
+            )
+        }))?;
+
+        // Draw Deck(Red...)
+        chart.draw_series(xs.iter().map(|x| {
+            let ox: f32 = *x;
+            let deck_width = 1.50f32;
+            Polygon::new(
+                [
+                    (ox - (&deck_width * ch_scale), oy - (1.0f32 * ch_scale)),
+                    (ox + (&deck_width * ch_scale), oy - (1.0f32 * ch_scale)),
+                    (ox + (&deck_width - 0.2f32) * ch_scale, oy),
+                    (ox - (&deck_width - 0.2f32) * ch_scale, oy),
+                ],
+                RGBColor(230, 0,0).filled(),
+            )
+        }))?;
+
+        // Draw Hull(dark red)
+        chart.draw_series(xs.iter().map(|x| {
+            let ox: f32 = *x;
+            let hull_width = 1.75f32;
+            Polygon::new(
+                [
+                    (ox - (&hull_width) * ch_scale, oy - (1.0f32) * ch_scale),
+                    (
+                        ox - ((&hull_width - 0.25f32) * ch_scale),
+                        oy - (2.0f32 * ch_scale),
+                    ),
+                    (
+                        ox + ((&hull_width - 0.25f32) * ch_scale),
+                        oy - (2.0f32 * ch_scale),
+                    ),
+                    (ox + ((&hull_width) * ch_scale), oy - ((1.0f32) * ch_scale)),
+                ],
+                RGBColor(72, 0, 0).filled(),
+            )
+        }))?;
+
+        // Draw Bridge
+        chart.draw_series(xs.iter().map(|x| {
+            let ox: f32 = *x;
+            let bridge_width = 0.25f32;
+            Polygon::new(
+                [
+                    (ox - (&bridge_width * ch_scale), oy + (1.0f32 * ch_scale)),
+                    (ox + (&bridge_width * ch_scale), oy + (1.0f32 * ch_scale)),
+                    (ox + (&bridge_width * ch_scale), oy + (1.5f32 * ch_scale)),
+                    (
+                        ox + ((&bridge_width + 0.14f32) * ch_scale),
+                        oy + (2.5f32 * ch_scale),
+                    ),
+                    (
+                        ox - ((&bridge_width + 0.14f32) * ch_scale),
+                        oy + (2.5f32 * ch_scale),
+                    ),
+                    (ox - (&bridge_width) * ch_scale, oy + (1.5f32 * ch_scale)),
+                ],
+                HSLColor(200.0, 200.0, 200.0).filled(),
+            )
+        }))?;
+
+        // Draw flag
+        // -- White background
+        let flag_width = 0.6f32;
+        let flag_floor = 3.0f32;
+        chart.draw_series(xs.iter().map(|x| {
+            let ox: f32 = *x;
+            Rectangle::new(
+                [
+                    (ox, oy + (flag_floor * ch_scale)),
+                    (
+                        ox + (&flag_width * ch_scale),
+                        oy + ((flag_floor + 1.0f32) * ch_scale),
+                    ),
+                ],
+                RGBColor(255, 255, 255).filled(),
+            )
+        }))?;
+
+        // -- red stripes
+        chart.draw_series(xs.iter().map(|x| {
+            let ox: f32 = *x;
+            Rectangle::new(
+                [
+                    (
+                        ox + (&flag_width * ch_scale),
+                        oy + ((flag_floor + 1.0f32) * ch_scale),
+                    ),
+                    (ox, oy + ((flag_floor + 0.8f32) * ch_scale)),
+                ],
+                RGBColor(255, 0, 0).filled(),
+            )
+        }))?;
+
+        chart.draw_series(xs.iter().map(|x| {
+            let ox: f32 = *x;
+            Rectangle::new(
+                [
+                    (
+                        ox + (&flag_width * ch_scale),
+                        oy + ((flag_floor + 0.6f32) * ch_scale),
+                    ),
+                    (ox, oy + ((flag_floor + 0.4f32) * ch_scale)),
+                ],
+                RGBColor(255, 0, 0).filled(),
+            )
+        }))?;
+
+        /*
+        chart.draw_series(xs.iter().map(|x| {
+            let ox: f32 = *x;
+            Rectangle::new(
+                [
+                    (
+                        ox + (&flag_width * ch_scale),
+                        oy + ((flag_floor + 0.4f32) * ch_scale),
+                    ),
+                    (ox, oy + ((flag_floor + 0.2f32) * ch_scale)),
+                ],
+                RGBColor(255, 0, 0).filled(),
+            )
+        }))?;
+        */
+
+        chart.draw_series(xs.iter().map(|x| {
+            let ox: f32 = *x;
+            Rectangle::new(
+                [
+                    (
+                        ox + (&flag_width * ch_scale),
+                        oy + ((flag_floor + 0.2f32) * ch_scale),
+                    ),
+                    (ox, oy + ((flag_floor) * ch_scale)),
+                ],
+                RGBColor(255, 0, 0).filled(),
+            )
+        }))?;
+
+        // -- blue patches
+        chart.draw_series(xs.iter().map(|x| {
+            let ox: f32 = *x;
+            Rectangle::new(
+                [
+                    (ox, oy + ((flag_floor + 1.0f32) * ch_scale)),
+                    (
+                        ox + (0.3f32 * ch_scale),
+                        oy + ((flag_floor + 0.6f32) * ch_scale),
+                    ),
+                ],
+                RGBColor(0, 0, 255).filled(),
+            )
+        }))?;
+    }
 
     root.present()?;
     return Ok(chart.into_coord_trans());
