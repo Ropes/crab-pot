@@ -87,7 +87,7 @@ pub fn draw(
         .draw()?;
 
     let xys = coordinates_from_prediction(tv.to_owned(), today);
-    log_wasm!("xys read: {:?}", xys.len());
+    //log_wasm!("xys read: {:?}", xys.len());
     chart.draw_series(AreaSeries::new(
         xys.iter().filter_map(|(x, y)| {
             if *x > 0f32 && *x < 24f32 {
@@ -98,7 +98,7 @@ pub fn draw(
         -10.0,
         RGBColor(139, 166, 214).mix(0.5),
     ))?;
-    /*
+    // Add some whitecaps to the sea
     chart.draw_series(LineSeries::new(
         xys.iter().filter_map(|(x, y)| {
             if *x > 0f32 && *x < 24f32 {
@@ -106,9 +106,8 @@ pub fn draw(
             }
             return None;
         }),
-        &BLUE,
+        RGBColor(206, 222, 248).stroke_width(1),
     ))?;
-    */
 
     // Draw vertical line to show current time
     let x_val = now.hour() as f32 + (now.minute() as f32 / 60f32);
@@ -264,6 +263,42 @@ pub fn draw(
             )
         }))?;
 
+        // draw smoke stacks
+        let stack_origin_width = 0.5f32; 
+        chart.draw_series(xs.iter().map(|x| {
+            let ox: f32 = *x;
+            Rectangle::new(
+                [
+                    (
+                        ox + (stack_origin_width * ch_scale),
+                        oy+ (1.0f32 * ch_scale),
+                    ),
+                    (
+                        ox + ((stack_origin_width + 0.1f32) * ch_scale),
+                        oy+ (2.5f32 * ch_scale),
+)
+                ],
+                RGBColor(128, 128, 128).filled(),
+            )
+        }))?;
+
+        chart.draw_series(xs.iter().map(|x| {
+            let ox: f32 = *x;
+            Rectangle::new(
+                [
+                    (
+                        ox - (stack_origin_width * ch_scale),
+                        oy+ (1.0f32 * ch_scale),
+                    ),
+                    (
+                        ox - ((stack_origin_width + 0.1f32) * ch_scale),
+                        oy+ (2.5f32 * ch_scale),
+)
+                ],
+                RGBColor(128, 128, 128).filled(),
+            )
+        }))?;
+
         // Draw flag
         // -- White background
         let flag_width = 0.6f32;
@@ -327,6 +362,7 @@ pub fn draw(
         }))?;
         */
 
+        // red stripes
         chart.draw_series(xs.iter().map(|x| {
             let ox: f32 = *x;
             Rectangle::new(
